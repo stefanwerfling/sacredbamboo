@@ -1,1 +1,17 @@
-/backend/node_modules/*
+# Dependencies / build artifacts
+backend/node_modules/
+backend/dist/
+backend/logs/
+
+# IDE
+.idea/
+.vscode/
+
+# Auto-generated reverse-engineering splits (regenerate via
+# work/analyser/split_gameserver_by_vocab.py + propagate_buckets.py)
+work/GameServer.c_split/
+work/tincat2.c_split/
+
+# OS
+.DS_Store
+Thumbs.db
