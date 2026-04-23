@@ -12,6 +12,10 @@ backend/logs/
 work/GameServer.c_split/
 work/tincat2.c_split/
 
+# Python (test helpers)
+__pycache__/
+*.pyc
+
 # OS
 .DS_Store
 Thumbs.db
