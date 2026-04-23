@@ -24,7 +24,7 @@ node dist/main.js   # default port 0.0.0.0:7066
 npx eslint 'src/**/*.ts'  # no script wired, but config is present
 ```
 
-- No test runner is wired. E2E validation is via `/tmp/sb_e2e_*.py` scripts written alongside each stage; they're not checked in.
+- E2E tests under `backend/tests/e2e/` (Python). Run all: `bash tests/e2e/run_all.sh` from `backend/` — boots a fresh server, runs nine stufe-scoped tests serially, reports pass/fail. Shared helpers live in `tests/e2e/tincat_client.py` (`TincatClient.handshake_and_login(name)` gives you a logged-in session); each test is <100 lines of pure assertions. No unit-test runner is wired.
 - TypeScript: NodeNext, ES2022, strict, ESM-only (`"type": "module"`). Local imports **must** use the `.js` suffix even in `.ts` sources. `experimentalDecorators` + `emitDecoratorMetadata` on — typeorm needs them.
 - ESLint extends `eslint:all` with 4-space indent, single quotes, semicolons, `padded-blocks` around classes, `prefer-arrow`. Match the existing style when editing.
 
@@ -134,7 +134,7 @@ This was inverted in an earlier iteration and fixed in Phase 1 of stufe 3b's fin
 4. If the body contains state you want reused, add a sender helper on `SacredClient` (e.g. `sendFoo(...)`). Name it after what the *receiver* sees — e.g. `sendChatMessage` for the outbound `SendChatMessage` packet.
 5. Create a handler class under `Handlers/` implementing `ISacredMessageHandler`. Keep handlers thin — the heavy lifting lives in the state stores or sender helpers. **Always** ack with a `LobbyResult(code, action)` where `action` is the inbound type, so the client's state machine can correlate.
 6. Register the handler in `Services/LobbyService.start()` in the matching section (Stufe 3a/3b.1/3b.2/3b.3/3b.4a/3b.4b).
-7. Write a quick Python E2E under `/tmp/sb_e2e_*.py`, start the server, smoke-test.
+7. Add a test under `backend/tests/e2e/test_<stufe>_<feature>.py` importing `from tincat_client import T, K, TincatClient, ...`. Extend `tincat_client.py`'s `T` / `K` dicts if the new type isn't already listed. Add the test filename to `run_all.sh`. Verify with `bash tests/e2e/run_all.sh`.
 
 ## Known gotchas
 

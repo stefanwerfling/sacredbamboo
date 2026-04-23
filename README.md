@@ -6,7 +6,7 @@ Clean-room reimplementation of the **Sacred Gold / Sacred Underworld** lobby ser
 
 The wire protocol is feature-complete: all 56 `SacredMsgType` values have wire-format support and around two thirds ship as implemented request handlers covering the full lobby experience — login, channels, server list, public/private chat, friends, find-user, profile info, character blocks. The remaining outbound-only types (Kick, ServerShutdown, UserKickedFromServer, …) are exposed as admin API on `LobbyServer` for a future HTTP/CLI hook-up.
 
-Verified against the [kryotek777/Sacred-Gold-LobbyServer](https://github.com/kryotek777/Sacred-Gold-LobbyServer) C# reference and the decompiled `tincat2.dll` / `GameServer.exe` under `work/`. End-to-end Python clients in `/tmp/sb_e2e_*.py` exercise every major flow (handshake, CUSTOMDATA round-trip, login, channels, chat, friends, private chat, admin alarm, profile, character blobs).
+Verified against the [kryotek777/Sacred-Gold-LobbyServer](https://github.com/kryotek777/Sacred-Gold-LobbyServer) C# reference and the decompiled `tincat2.dll` / `GameServer.exe` under `work/`. An end-to-end test suite under `backend/tests/e2e/` exercises every major flow (handshake, CUSTOMDATA, login, channels, chat, friends, private chat, admin alarm, profile, character blobs) — run `bash tests/e2e/run_all.sh` from `backend/`.
 
 Not yet verified against a real Sacred client — protocol-level testing only.
 
@@ -20,6 +20,14 @@ node dist/main.js
 ```
 
 The server listens on `0.0.0.0:7066` by default and logs to `./logs/` + stdout via figtree's winston setup. `SIGINT` / `SIGTERM` shuts it down gracefully.
+
+To run the E2E suite:
+
+```bash
+cd backend
+npm run compile
+bash tests/e2e/run_all.sh   # boots a fresh server, runs all tests, tears it down
+```
 
 ## Configuration
 
