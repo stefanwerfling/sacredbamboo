@@ -1,7 +1,7 @@
 # Dependencies / build artifacts
-backend/node_modules/
-backend/dist/
-backend/logs/
+backend_lobbyserver/node_modules/
+backend_lobbyserver/dist/
+backend_lobbyserver/logs/
 
 # IDE
 .idea/

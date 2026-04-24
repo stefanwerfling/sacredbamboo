@@ -8,14 +8,13 @@ TypeScript reimplementation of the **Sacred Gold** lobby server. Speaks the orig
 
 ## Repository layout
 
-- `backend/` — live TypeScript server (the only build target).
+- `backend_lobbyserver/` — live TypeScript server (the only build target).
 - `work/` — reverse-engineering workspace. Contains the raw decompiled `tincat2.c` + `GameServer.c`, plus bucketed per-function splits under `tincat2.c_split/` and `GameServer.c_split/` with `index.json` call-graph databases. Python analysers under `work/analyser/`. **Research input only** — do not import into the backend.
 - `notes/samples.txt` — links to the two C# reference lobby servers. The `kryotek777/Sacred-Gold-LobbyServer` repo is cloned into `/tmp/sacred-gold-ref/` during development sessions as the authoritative Sacred Gold protocol reference.
 - `frontend/` — empty placeholder.
 
 ## Commands
-
-All from `backend/`:
+All from `backend_lobbyserver/`:
 
 ```bash
 npm install
@@ -24,7 +23,7 @@ node dist/main.js   # default port 0.0.0.0:7066
 npx eslint 'src/**/*.ts'  # no script wired, but config is present
 ```
 
-- E2E tests under `backend/tests/e2e/` (Python). Run all: `bash tests/e2e/run_all.sh` from `backend/` — boots a fresh server, runs nine stufe-scoped tests serially, reports pass/fail. Shared helpers live in `tests/e2e/tincat_client.py` (`TincatClient.handshake_and_login(name)` gives you a logged-in session); each test is <100 lines of pure assertions. No unit-test runner is wired.
+- E2E tests under `backend_lobbyserver/tests/e2e/` (Python). Run all: `bash tests/e2e/run_all.sh` from `backend_lobbyserver/` — boots a fresh server, runs nine stufe-scoped tests serially, reports pass/fail. Shared helpers live in `tests/e2e/tincat_client.py` (`TincatClient.handshake_and_login(name)` gives you a logged-in session); each test is <100 lines of pure assertions. No unit-test runner is wired.
 - TypeScript: NodeNext, ES2022, strict, ESM-only (`"type": "module"`). Local imports **must** use the `.js` suffix even in `.ts` sources. `experimentalDecorators` + `emitDecoratorMetadata` on — typeorm needs them.
 - ESLint extends `eslint:all` with 4-space indent, single quotes, semicolons, `padded-blocks` around classes, `prefer-arrow`. Match the existing style when editing.
 
@@ -32,7 +31,7 @@ npx eslint 'src/**/*.ts'  # no script wired, but config is present
 
 ### Top-level (figtree-based)
 
-Everything runs inside figtree's `BackendApp` framework. Entry: `backend/src/main.ts` → `new SacredBambooBackend().start()`.
+Everything runs inside figtree's `BackendApp` framework. Entry: `backend_lobbyserver/src/main.ts` → `new SacredBambooBackend().start()`.
 
 ```
 SacredBambooBackend   extends figtree.BackendApp
@@ -98,7 +97,7 @@ Unhandled types are debug-logged and dropped without closing the connection. Exc
 
 ### State stores
 
-All live in `backend/src/inc/State/`:
+All live in `backend_lobbyserver/src/inc/State/`:
 
 - `ChannelRegistry` — id → ChannelInfo + live member Set<SacredClient>. Join/leave is idempotent. Counts (user/game) are derived from live membership at serialize time, not stored.
 - `ServerRegistry` — serverId → {SacredClient, ServerInfoMessage}. GameServer lifecycle tracked via `ServerLoginRequest` / `ServerLogout` / socket close.
@@ -110,7 +109,7 @@ Persistence (stufe 3b.5): `IAccountRepository` has two implementations — `InMe
 
 ### Packet class conventions
 
-In `backend/src/inc/Packets/`:
+In `backend_lobbyserver/src/inc/Packets/`:
 - `ATincatPacket` — base with `getType()`/`serialize()`.
 - `ATincatPacketConnection` — 52-byte connection-control base (LOGMEON/LOGMEOFF/LOGONACCEPTED/LOGOFFACCEPTED).
 - `TincatPacketV2.serializeHeader(payload)` computes the CRC on the fly and returns the 28 header bytes.
@@ -134,7 +133,7 @@ This was inverted in an earlier iteration and fixed in Phase 1 of stufe 3b's fin
 4. If the body contains state you want reused, add a sender helper on `SacredClient` (e.g. `sendFoo(...)`). Name it after what the *receiver* sees — e.g. `sendChatMessage` for the outbound `SendChatMessage` packet.
 5. Create a handler class under `Handlers/` implementing `ISacredMessageHandler`. Keep handlers thin — the heavy lifting lives in the state stores or sender helpers. **Always** ack with a `LobbyResult(code, action)` where `action` is the inbound type, so the client's state machine can correlate.
 6. Register the handler in `Services/LobbyService.start()` in the matching section (Stufe 3a/3b.1/3b.2/3b.3/3b.4a/3b.4b).
-7. Add a test under `backend/tests/e2e/test_<stufe>_<feature>.py` importing `from tincat_client import T, K, TincatClient, ...`. Extend `tincat_client.py`'s `T` / `K` dicts if the new type isn't already listed. Add the test filename to `run_all.sh`. Verify with `bash tests/e2e/run_all.sh`.
+7. Add a test under `backend_lobbyserver/tests/e2e/test_<stufe>_<feature>.py` importing `from tincat_client import T, K, TincatClient, ...`. Extend `tincat_client.py`'s `T` / `K` dicts if the new type isn't already listed. Add the test filename to `run_all.sh`. Verify with `bash tests/e2e/run_all.sh`.
 
 ## Known gotchas
 

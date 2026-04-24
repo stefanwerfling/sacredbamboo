@@ -6,14 +6,14 @@ Clean-room reimplementation of the **Sacred Gold / Sacred Underworld** lobby ser
 
 The wire protocol is feature-complete: all 56 `SacredMsgType` values have wire-format support and around two thirds ship as implemented request handlers covering the full lobby experience — login, channels, server list, public/private chat, friends, find-user, profile info, character blocks. The remaining outbound-only types (Kick, ServerShutdown, UserKickedFromServer, …) are exposed as admin API on `LobbyServer` for a future HTTP/CLI hook-up.
 
-Verified against the [kryotek777/Sacred-Gold-LobbyServer](https://github.com/kryotek777/Sacred-Gold-LobbyServer) C# reference and the decompiled `tincat2.dll` / `GameServer.exe` under `work/`. An end-to-end test suite under `backend/tests/e2e/` exercises every major flow (handshake, CUSTOMDATA, login, channels, chat, friends, private chat, admin alarm, profile, character blobs) — run `bash tests/e2e/run_all.sh` from `backend/`.
+Verified against the [kryotek777/Sacred-Gold-LobbyServer](https://github.com/kryotek777/Sacred-Gold-LobbyServer) C# reference and the decompiled `tincat2.dll` / `GameServer.exe` under `work/`. An end-to-end test suite under `backend_lobbyserver/tests/e2e/` exercises every major flow (handshake, CUSTOMDATA, login, channels, chat, friends, private chat, admin alarm, profile, character blobs) — run `bash tests/e2e/run_all.sh` from `backend_lobbyserver/`.
 
 Not yet verified against a real Sacred client — protocol-level testing only.
 
 ## Quick start
 
 ```bash
-cd backend
+cd backend_lobbyserver
 npm install
 npm run compile
 node dist/main.js
@@ -24,14 +24,14 @@ The server listens on `0.0.0.0:7066` by default and logs to `./logs/` + stdout v
 To run the E2E suite:
 
 ```bash
-cd backend
+cd backend_lobbyserver
 npm run compile
 bash tests/e2e/run_all.sh   # boots a fresh server, runs all tests, tears it down
 ```
 
 ## Configuration
 
-Put a `config.json` next to the compiled binary (or `backend/config.json` before compile). The file is optional — sensible defaults are applied when it's missing or partial.
+Put a `config.json` next to the compiled binary (or `backend_lobbyserver/config.json` before compile). The file is optional — sensible defaults are applied when it's missing or partial.
 
 ```jsonc
 {
@@ -69,7 +69,7 @@ Put a `config.json` next to the compiled binary (or `backend/config.json` before
 
 ## Repository layout
 
-- `backend/` — the live TypeScript code (the only compiled target).
+- `backend_lobbyserver/` — the live TypeScript code (the only compiled target).
 - `work/` — reverse-engineering artefacts: the decompiled `tincat2.c` / `GameServer.c`, a per-function split with semantic bucketing in `tincat2.c_split/` and `GameServer.c_split/`, plus Python analysers under `work/analyser/`. These are research inputs, not build inputs.
 - `notes/samples.txt` — links to the C# reference implementations that informed the protocol work.
 - `frontend/` — empty placeholder.
