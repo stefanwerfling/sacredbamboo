@@ -1,6 +1,5 @@
+import {ServerInfoMessage} from 'sacredbamboo-core';
 import {SacredClient} from '../Client/SacredClient.js';
-import {ServerInfoMessage} from '../Packets/Messages/ServerInfoMessage.js';
-
 /**
  * Live directory of GameServer clients that have successfully logged in.
  *

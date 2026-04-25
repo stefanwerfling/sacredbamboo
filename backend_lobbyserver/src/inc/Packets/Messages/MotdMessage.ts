@@ -1,5 +1,4 @@
-import {Win1252} from '../../Util/Win1252.js';
-
+import {Win1252} from 'sacredbamboo-core';
 /**
  * Body of SendMessageOfTheDay (SacredMsgType = 56, dynamic size, max 131218).
  *

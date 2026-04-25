@@ -1,8 +1,6 @@
+import {LobbyResults, SacredMsgType} from 'sacredbamboo-core';
 import {ISacredMessageHandler} from '../Client/ISacredMessageHandler.js';
 import {SacredClient} from '../Client/SacredClient.js';
-import {LobbyResults} from '../Packets/Messages/LobbyResults.js';
-import {SacredMsgType} from '../Packets/SacredMsgType.js';
-
 /**
  * Handles PrivateInfoRequest (3). Empty body. Replies with SendPrivateInfo
  * (5) carrying the stored mail from the ProfileStore. Password is NOT

@@ -1,5 +1,4 @@
-import {Win1252} from '../../Util/Win1252.js';
-
+import {Win1252} from 'sacredbamboo-core';
 /**
  * Body of ServerShutdown (50), 256 bytes:
  *   +0   char MessageData[256]    shutdown note displayed on each client

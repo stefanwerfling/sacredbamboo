@@ -1,8 +1,10 @@
 # Dependencies / build artifacts
-backend_lobbyserver/node_modules/
-backend_lobbyserver/dist/
-backend_lobbyserver/logs/
+node_modules/
+**/node_modules/
+**/dist/
+**/logs/
 backend_lobbyserver/config.json
+backend_gameserver/config.json
 
 # Proprietary Sacred Gold assets — build them locally by extracting from
 # a retail install into work/gameserver/assets/server/. Not redistributable.

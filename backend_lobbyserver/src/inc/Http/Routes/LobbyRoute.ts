@@ -1,7 +1,7 @@
+import {ClientType} from 'sacredbamboo-core';
 import {Router} from 'express';
 import {DefaultRoute, StatusCodes} from 'figtree';
 import {ClientState} from '../../Client/ClientState.js';
-import {ClientType} from '../../Client/ClientType.js';
 import {SacredClient} from '../../Client/SacredClient.js';
 import {sacredConfig} from '../../Config/SacredBambooConfig.js';
 import {LobbyService} from '../../Services/LobbyService.js';

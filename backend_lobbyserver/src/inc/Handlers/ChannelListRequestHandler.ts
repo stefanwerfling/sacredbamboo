@@ -1,9 +1,6 @@
-import {ClientType} from '../Client/ClientType.js';
+import {ClientType, LobbyResults, SacredMsgType} from 'sacredbamboo-core';
 import {ISacredMessageHandler} from '../Client/ISacredMessageHandler.js';
 import {SacredClient} from '../Client/SacredClient.js';
-import {LobbyResults} from '../Packets/Messages/LobbyResults.js';
-import {SacredMsgType} from '../Packets/SacredMsgType.js';
-
 /**
  * Handles ChannelListRequest (23). The body is an EmptyMessage (0 bytes);
  * we just materialize the registry's current state and send it.

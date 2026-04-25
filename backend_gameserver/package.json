@@ -1,0 +1,42 @@
+{
+  "author": "Stefan Werfling",
+  "dependencies": {
+    "ets": "git+https://github.com/OpenSourcePKG/ets.git",
+    "express": "^5.1.0",
+    "express-rate-limit": "^7.5.1",
+    "express-session": "^1.18.1",
+    "figtree": "git+https://github.com/stefanwerfling/figtree.git#9abad79b8f161b7f4962e9f4de2add5e22d0557a",
+    "helmet": "^8.1.0",
+    "moment": "^2.30.1",
+    "moment-timezone": "^0.5.45",
+    "mysql": "^2.18.1",
+    "sacredbamboo-core": "file:../backend_core",
+    "typeorm": "0.3.20",
+    "uuid": "^11.1.0",
+    "vts": "git+https://github.com/OpenSourcePKG/vts.git",
+    "winston": "^3.13.0",
+    "winston-daily-rotate-file": "^5.0.0"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.3",
+    "@types/express-session": "^1.18.2",
+    "@types/node": "^18.19.26",
+    "@types/uuid": "^9.0.8",
+    "@typescript-eslint/eslint-plugin": "^7.4.0",
+    "@typescript-eslint/parser": "^7.4.0",
+    "eslint": "^8.57.0",
+    "eslint-plugin-prefer-arrow": "^1.2.3",
+    "typescript": "^5.4.3"
+  },
+  "keywords": [],
+  "main": "dist/main.js",
+  "name": "sacredbamboo_gameserver",
+  "scripts": {
+    "build": "npm run compile",
+    "compile": "tsc --project tsconfig.json",
+    "start": "node dist/main.js",
+    "npm-check-updates": "npm-check-updates"
+  },
+  "type": "module",
+  "version": "1.0.0"
+}

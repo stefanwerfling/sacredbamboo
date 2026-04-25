@@ -8,10 +8,18 @@ TypeScript reimplementation of the **Sacred Gold** lobby server. Speaks the orig
 
 ## Repository layout
 
-- `backend_lobbyserver/` — live TypeScript server (the only build target).
-- `work/` — reverse-engineering workspace. Contains the raw decompiled `tincat2.c` + `GameServer.c`, plus bucketed per-function splits under `tincat2.c_split/` and `GameServer.c_split/` with `index.json` call-graph databases. Python analysers under `work/analyser/`. **Research input only** — do not import into the backend.
+The repo is an **npm workspaces monorepo**. The top-level `package.json` declares `backend_core`, `backend_lobbyserver`, and `backend_gameserver` as workspaces; running `npm install` at the root hoists shared dependencies (notably `figtree`) into a single root `node_modules/` so every subpackage sees the same class identities at runtime. Build commands are `npm run build:core | build:lobby | build:gameserver` from the root.
+
+- `backend_core/` — shared library, published to the local workspace as `sacredbamboo-core`. Contains the Tincat V2 wire layer (Crc32, TincatHandles, TincatCrypto, Win1252, all `Packets/TincatPacket*`/`ATincatPacket*`) plus the Sacred lobby CUSTOMDATA layer (`SacredMsgType`, `SacredPacketSecurityHeader`, `SacredPacketMeta`, `SacredPacket`) plus the four message bodies used on both sides of the server-login handshake (`ServerInfoMessage`, `LobbyResultMessage`, `LobbyResults`, `ServerLoginInfoMessage`). Public surface lives in `src/index.ts`. `figtree` is declared as a **peerDependency** so the consumer's copy is the only one at runtime.
+- `backend_lobbyserver/` — live TypeScript lobby server (feature-complete). Imports the shared protocol via `import {…} from 'sacredbamboo-core'`.
+- `backend_gameserver/` — early skeleton of the GameServer reimplementation. Same figtree-based shape as the lobby (see "GameServer skeleton" below). Boots a Tincat V2 listener on port 7080 plus an outbound `LobbyUplink` that registers itself with the configured lobby. Inbound CUSTOMDATA handlers for game-clients are still pending. Imports protocol code from `sacredbamboo-core`.
+- `work/` — reverse-engineering workspace. Contains the raw decompiled `tincat2.c` + `GameServer.c`, plus bucketed per-function splits under `tincat2.c_split/` and `GameServer.c_split/` with `index.json` call-graph databases. Python analysers under `work/analyser/`. **Research input only** — do not import into the backends.
 - `notes/samples.txt` — links to the two C# reference lobby servers. The `kryotek777/Sacred-Gold-LobbyServer` repo is cloned into `/tmp/sacred-gold-ref/` during development sessions as the authoritative Sacred Gold protocol reference.
 - `frontend/` — empty placeholder.
+
+### Why workspaces (and not just `file:../backend_core`)
+
+`backend_core` declares `figtree` as a peerDependency; it also lists figtree as a devDependency so it can compile in isolation. Without workspaces, `npm install` inside core would create `backend_core/node_modules/figtree`, and Node's runtime resolution would pick that up first when the lobby imported a class from core — giving us **two figtree copies with different class identities**, which manifests as `instanceof RawMessage === false` failures. Workspaces hoist `figtree` into the root `node_modules/`, so all three subpackages get the exact same class. If you ever drop workspaces, also drop `figtree` from `backend_core/devDependencies` and rely on a build pipeline that runs `npm install` in each consumer instead.
 
 ## Commands
 All from `backend_lobbyserver/`:
@@ -155,6 +163,31 @@ Two big decompiled C files under `work/`:
 Use the `index.json` files to navigate: filter by bucket (`jq '.[] | select(.bucket=="network")'`), follow `calls` / `called_by` to trace flow, look at `strings` to identify a function by its log messages.
 
 The analyser scripts under `work/analyser/` (`split_gameserver_by_vocab.py`, `propagate_buckets.py`) regenerate these splits from the raw `.c` files; useful when the decompiler output changes.
+
+## GameServer skeleton (`backend_gameserver/`)
+
+Same shape as `backend_lobbyserver/`, intentionally minimal so each protocol detail can be added in small steps as it is reverse-engineered from `work/GameServer.c_split/`.
+
+What's there today:
+
+- **Skeleton**: `package.json` (figtree pinned to commit `9abad79b…` to match the lobby), `tsconfig.json` (with `skipLibCheck: true` to dodge a chromadb d.ts upgrade), `config.json`, `src/main.ts`, `src/inc/SacredBambooGameServerBackend.ts`.
+- **Config**: `Config/SchemaGameServerOptions.ts` + `SchemaSacredBambooGameServerConfig.ts` + `SacredBambooGameServerConfig.ts` — same singleton-via-`Config._instance`-cast pattern as the lobby. Default port is **7080** (lobby uses 7066). The `gameserver` config section also carries `lobbyHost` / `lobbyPort` for the eventual server-login flow.
+- **Tincat wire layer**: imported from `sacredbamboo-core` — `Crc32`, `TincatHandles`, `TincatCrypto`, `Win1252`, all `TincatPacket*` + `ATincatPacket*`.
+- **Client/Server**: `Client/GameClient.ts` + `GameServer.ts` mirror `SacredClient` + `LobbyServer` — LOGMEON/LOGMEOFF/STAYINGALIVE/TIMESYNC/CUSTOMDATA, connection-id allocation, sweeper, no IP bans yet. `GameServer.authenticate()` currently returns `true` for any creds.
+- **Dispatch**: `Client/IGameMessageHandler.ts` + `Client/GameMessageRegistry.ts` parallel the lobby's `ISacredMessageHandler` / `SacredMessageRegistry`. Sub-packet shape is `{type: GameMsgType, body: Buffer}` (`Packets/GameMessage.ts`).
+- **Service**: `Services/GameService.ts` is a `ServiceAbstract` that builds a `GameServer`, listens, and registers no inbound handlers. It also constructs a `LobbyUplink` on start and tears it down on stop.
+- **Lobby uplink** (`Lobby/LobbyUplink.ts` + `LobbyUplinkState.ts`): outbound TCP to the lobby. State machine `Disconnected → Connecting → AwaitingLogonAccepted → AwaitingServerLogin → Established`. Sends tincat LOGMEON with the configured `lobbyTincatUser`/`lobbyTincatPassword`, then a `CUSTOMDATA(ServerLoginRequest)` carrying a `ServerInfoMessage` for `lobbyChannelId`. Established when **both** `ServerLoginResult` and `LobbyResult(ServerLoginRequest, Ok)` arrive. After that it emits `STAYINGALIVE` at half the configured `keepAliveIntervalMs` so the lobby's idle-sweeper doesn't drop us. Reconnect uses exponential backoff (1s → 30s cap), reset on successful Established. Inbound CUSTOMDATA other than the two acks is currently logged and dropped.
+- **Sacred-protocol layer**: imported from `sacredbamboo-core` (no longer duplicated). The shared package owns `SacredMsgType`, `SacredPacket`, `ServerInfoMessage`, `LobbyResultMessage`, etc.
+
+What's deliberately **not** there yet:
+
+- **Inbound CUSTOMDATA sub-framing**: `GameMessage.parseRaw` reads the first u16 LE as the type and treats the rest as body. This is a placeholder for what real game-clients send to the GameServer, until the framing is identified in `work/GameServer.c_split/network/*`. `GameMsgType` is a stub enum with only `None = 0`. (Note: the OUTBOUND `LobbyUplink` already speaks the real lobby framing via the duplicated `SacredPacket` — that's a different surface from the inbound game-client one.)
+- **Domain handlers**: no login, no world, no character handlers. Each lands as its own handler under `Handlers/` and is registered in `GameService.start()` once we know its sub-type and body layout.
+- **Domain state stores**: no equivalents to the lobby's `ChannelRegistry` / `ServerRegistry` / etc. — the gameserver's state is its own thing (sessions, characters, world ticks) and lands when those handlers do.
+- **HTTP / DB**: no admin routes, no account repository. The gameserver currently doesn't authenticate at all.
+- **Tests**: no `tests/` directory yet. Once handlers exist they get an E2E test in the same Python pattern as `backend_lobbyserver/tests/e2e/`.
+
+Adding a new GameServer handler (when the sub-framing lands) follows the same cookbook as the lobby: enum value → `GameMsgType`, body class under `Packets/Messages/`, sender helper on `GameClient` if reused, handler under `Handlers/`, register in `GameService.start()`.
 
 ## Protocol references
 

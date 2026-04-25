@@ -1,5 +1,4 @@
-import {Win1252} from '../../Util/Win1252.js';
-
+import {Win1252} from 'sacredbamboo-core';
 /**
  * Body shared by SendChatMessage (31), ReceiveChatMessage (30),
  * SendPrivateChatMessage (33), ReceivePrivateChatMessage (32):

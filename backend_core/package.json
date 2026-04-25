@@ -1,0 +1,30 @@
+{
+  "name": "sacredbamboo-core",
+  "version": "1.0.0",
+  "description": "Shared Tincat V2 + Sacred lobby protocol code for backend_lobbyserver and backend_gameserver",
+  "author": "Stefan Werfling",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "npm run compile",
+    "compile": "tsc --project tsconfig.json"
+  },
+  "peerDependencies": {
+    "figtree": "git+https://github.com/stefanwerfling/figtree.git#9abad79b8f161b7f4962e9f4de2add5e22d0557a"
+  },
+  "devDependencies": {
+    "@types/node": "^18.19.26",
+    "figtree": "git+https://github.com/stefanwerfling/figtree.git#9abad79b8f161b7f4962e9f4de2add5e22d0557a",
+    "typescript": "^5.4.3"
+  }
+}

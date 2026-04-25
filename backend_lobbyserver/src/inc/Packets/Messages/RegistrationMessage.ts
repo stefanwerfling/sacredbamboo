@@ -1,6 +1,4 @@
-import {TincatCrypto} from '../../Util/TincatCrypto.js';
-import {Win1252} from '../../Util/Win1252.js';
-
+import {TincatCrypto, Win1252} from 'sacredbamboo-core';
 /**
  * Body of ClientRegistrationRequest (1), 242 bytes:
  *   +0    char Username[80]       plain Win-1252

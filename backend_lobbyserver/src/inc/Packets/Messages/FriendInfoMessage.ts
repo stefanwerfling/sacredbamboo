@@ -1,4 +1,4 @@
-import {Win1252} from '../../Util/Win1252.js';
+import {Win1252} from 'sacredbamboo-core';
 import {BuddyStatus} from './BuddyStatus.js';
 
 /**

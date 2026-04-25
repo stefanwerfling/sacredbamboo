@@ -1,5 +1,4 @@
-import {Win1252} from '../../Util/Win1252.js';
-
+import {Win1252} from 'sacredbamboo-core';
 /**
  * Body shared by ReceivePrivateInfo (4, server→user response) and
  * SendPrivateInfo (5, user→server update), 112 bytes:

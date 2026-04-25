@@ -1,8 +1,7 @@
+import {ATincatPacket, ATincatPacketConnection, ClientType, Crc32, LobbyResultMessage, LobbyResults, SacredMsgType, SacredPacket, SacredPacketParseError, ServerInfoMessage, ServerLoginInfoMessage, TincatHandles, TincatPacketCustomData, TincatPacketLogOff, TincatPacketLogOffAccepted, TincatPacketLogOn, TincatPacketLogonAccepted, TincatPacketTimeSync, TincatPacketTypes, TincatPacketV2} from 'sacredbamboo-core';
 import {RawClient, RawMessage} from 'figtree';
 import net from 'net';
 import {LobbyServer} from '../LobbyServer.js';
-import {ATincatPacket} from '../Packets/ATincatPacket.js';
-import {ATincatPacketConnection} from '../Packets/ATincatPacketConnection.js';
 import {BuddyAddedNotificationMessage} from '../Packets/Messages/BuddyAddedNotificationMessage.js';
 import {BuddyStatus} from '../Packets/Messages/BuddyStatus.js';
 import {ChannelInfoWithCounts, ChannelListMessage} from '../Packets/Messages/ChannelListMessage.js';
@@ -13,33 +12,15 @@ import {ImportantMessage} from '../Packets/Messages/ImportantMessage.js';
 import {JoinChannelMessage} from '../Packets/Messages/JoinChannelMessage.js';
 import {KickMessage} from '../Packets/Messages/KickMessage.js';
 import {KickReasons} from '../Packets/Messages/KickReasons.js';
-import {LobbyResultMessage} from '../Packets/Messages/LobbyResultMessage.js';
-import {LobbyResults} from '../Packets/Messages/LobbyResults.js';
 import {LoginResultMessage} from '../Packets/Messages/LoginResultMessage.js';
 import {MotdMessage} from '../Packets/Messages/MotdMessage.js';
 import {PrivateInfoMessage} from '../Packets/Messages/PrivateInfoMessage.js';
 import {PublicDataMessage} from '../Packets/Messages/PublicDataMessage.js';
 import {PublicInfoMessage} from '../Packets/Messages/PublicInfoMessage.js';
-import {ServerInfoMessage} from '../Packets/Messages/ServerInfoMessage.js';
-import {ServerLoginInfoMessage} from '../Packets/Messages/ServerLoginInfoMessage.js';
 import {ServerShutdownMessage} from '../Packets/Messages/ServerShutdownMessage.js';
 import {UserKickedFromServerMessage} from '../Packets/Messages/UserKickedFromServerMessage.js';
-import {SacredPacket, SacredPacketParseError} from '../Packets/SacredPacket.js';
-import {SacredMsgType} from '../Packets/SacredMsgType.js';
-import {TincatPacketCustomData} from '../Packets/TincatPacketCustomData.js';
-import {TincatPacketLogOff} from '../Packets/TincatPacketLogOff.js';
-import {TincatPacketLogOffAccepted} from '../Packets/TincatPacketLogOffAccepted.js';
-import {TincatPacketLogOn} from '../Packets/TincatPacketLogOn.js';
-import {TincatPacketLogonAccepted} from '../Packets/TincatPacketLogonAccepted.js';
-import {TincatPacketTimeSync} from '../Packets/TincatPacketTimeSync.js';
-import {TincatPacketTypes} from '../Packets/TincatPacketTypes.js';
-import {TincatPacketV2} from '../Packets/TincatPacketV2.js';
-import {Crc32} from '../Util/Crc32.js';
 import {logger} from '../Util/Logger.js';
-import {TincatHandles} from '../Util/TincatHandles.js';
 import {ClientState} from './ClientState.js';
-import {ClientType} from './ClientType.js';
-
 /**
  * Per-connection state machine for a Tincat V2 session.
  *

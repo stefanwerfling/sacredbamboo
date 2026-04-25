@@ -1,5 +1,4 @@
-import {Win1252} from '../../Util/Win1252.js';
-
+import {Win1252} from 'sacredbamboo-core';
 /**
  * Body of OtherUserJoinedChannel (28) and OtherUserLeftChannel (29):
  *   +0   i32  PermId

@@ -1,6 +1,5 @@
+import {Win1252} from 'sacredbamboo-core';
 import {ChannelInfo} from '../../State/ChannelInfo.js';
-import {Win1252} from '../../Util/Win1252.js';
-
 /**
  * Body of SendChannelList (24). Fixed-size payload even when fewer
  * channels are present — the client reads `count` entries from a

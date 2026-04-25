@@ -1,6 +1,4 @@
-import {TincatCrypto} from '../../Util/TincatCrypto.js';
-import {Win1252} from '../../Util/Win1252.js';
-
+import {TincatCrypto, Win1252} from 'sacredbamboo-core';
 /**
  * Body of a CUSTOMDATA ClientLoginRequest (SacredMsgType = 2).
  *

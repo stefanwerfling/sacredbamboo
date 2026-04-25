@@ -1,8 +1,6 @@
+import {LobbyResults, SacredMsgType} from 'sacredbamboo-core';
 import {ISacredMessageHandler} from '../Client/ISacredMessageHandler.js';
 import {SacredClient} from '../Client/SacredClient.js';
-import {LobbyResults} from '../Packets/Messages/LobbyResults.js';
-import {SacredMsgType} from '../Packets/SacredMsgType.js';
-
 /**
  * Handles ReceivePublicInfo (7). The spec lets a user push a new
  * username + permId into the server. In practice the username is

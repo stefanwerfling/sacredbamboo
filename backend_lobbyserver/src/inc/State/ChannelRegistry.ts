@@ -1,4 +1,4 @@
-import {ClientType} from '../Client/ClientType.js';
+import {ClientType} from 'sacredbamboo-core';
 import {SacredClient} from '../Client/SacredClient.js';
 import {ChannelInfo} from './ChannelInfo.js';
 

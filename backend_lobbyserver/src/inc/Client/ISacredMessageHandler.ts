@@ -1,5 +1,4 @@
-import {SacredMsgType} from '../Packets/SacredMsgType.js';
-import {SacredPacket} from '../Packets/SacredPacket.js';
+import {SacredMsgType, SacredPacket} from 'sacredbamboo-core';
 import {SacredClient} from './SacredClient.js';
 
 /**

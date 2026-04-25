@@ -1,11 +1,7 @@
-import {ClientType} from '../Client/ClientType.js';
+import {ClientType, LobbyResults, SacredMsgType, SacredPacket, ServerInfoMessage} from 'sacredbamboo-core';
 import {ISacredMessageHandler} from '../Client/ISacredMessageHandler.js';
 import {SacredClient} from '../Client/SacredClient.js';
 import {sacredConfig} from '../Config/SacredBambooConfig.js';
-import {LobbyResults} from '../Packets/Messages/LobbyResults.js';
-import {ServerInfoMessage} from '../Packets/Messages/ServerInfoMessage.js';
-import {SacredMsgType} from '../Packets/SacredMsgType.js';
-import {SacredPacket} from '../Packets/SacredPacket.js';
 import {logger} from '../Util/Logger.js';
 
 /**

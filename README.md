@@ -12,20 +12,36 @@ Not yet verified against a real Sacred client — protocol-level testing only.
 
 ## Quick start
 
+The repo is an npm workspaces monorepo with three packages: `backend_core` (shared protocol), `backend_lobbyserver`, `backend_gameserver`. Install everything once at the top, build per workspace.
+
+```bash
+npm install                  # installs all three workspaces
+npm run build                # build everything in dependency order
+npm run build:core           # or just backend_core
+npm run build:lobby          # backend_lobbyserver
+npm run build:gameserver     # backend_gameserver
+```
+
+To run the lobby:
+
 ```bash
 cd backend_lobbyserver
-npm install
-npm run compile
 node dist/main.js
 ```
 
-The server listens on `0.0.0.0:7066` by default and logs to `./logs/` + stdout via figtree's winston setup. `SIGINT` / `SIGTERM` shuts it down gracefully.
+The lobby listens on `0.0.0.0:7066` by default and logs to `./logs/` + stdout via figtree's winston setup. `SIGINT` / `SIGTERM` shuts it down gracefully.
 
-To run the E2E suite:
+To run the gameserver against a running lobby:
+
+```bash
+cd backend_gameserver
+node dist/main.js            # listens on 0.0.0.0:7080, registers itself with the lobby on 127.0.0.1:7066
+```
+
+To run the lobby's E2E suite:
 
 ```bash
 cd backend_lobbyserver
-npm run compile
 bash tests/e2e/run_all.sh   # boots a fresh server, runs all tests, tears it down
 ```
 
@@ -69,7 +85,9 @@ Put a `config.json` next to the compiled binary (or `backend_lobbyserver/config.
 
 ## Repository layout
 
-- `backend_lobbyserver/` — the live TypeScript code (the only compiled target).
+- `backend_core/` — shared library: the Tincat V2 wire layer (CRC, envelope, handshake) plus the Sacred lobby CUSTOMDATA framing (`SacredPacket`, `SacredMsgType`, `SACRED_PACKET_META`) and the message bodies used on both sides of the lobby↔gameserver handshake (`ServerInfoMessage`, `LobbyResultMessage`, …). Built to `dist/` and consumed by the two backends as `sacredbamboo-core` (file:`../backend_core` workspace dep).
+- `backend_lobbyserver/` — the live lobby TypeScript code (feature-complete).
+- `backend_gameserver/` — early skeleton of the GameServer reimplementation. Boots a Tincat V2 listener (default `0.0.0.0:7080`) with the same handshake the lobby implements, plus an outbound `LobbyUplink` that registers this server with the configured lobby. Inbound CUSTOMDATA handlers for actual game-clients still pending — they get added as their wire layout is reverse-engineered from `work/GameServer.c_split/`.
 - `work/` — reverse-engineering artefacts: the decompiled `tincat2.c` / `GameServer.c`, a per-function split with semantic bucketing in `tincat2.c_split/` and `GameServer.c_split/`, plus Python analysers under `work/analyser/`. These are research inputs, not build inputs.
 - `notes/samples.txt` — links to the C# reference implementations that informed the protocol work.
 - `frontend/` — empty placeholder.

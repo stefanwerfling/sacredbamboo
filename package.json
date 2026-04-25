@@ -1,10 +1,18 @@
 {
   "name": "sacredbamboo",
   "version": "1.0.0",
-  "description": "Sacred bamboo - Lobby Server",
-  "main": "index.js",
+  "description": "Sacred bamboo - Sacred Gold lobby + game server reimplementation",
+  "private": true,
+  "workspaces": [
+    "backend_core",
+    "backend_lobbyserver",
+    "backend_gameserver"
+  ],
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "build": "npm run build -ws --if-present",
+    "build:core": "npm run build -w backend_core",
+    "build:lobby": "npm run build -w backend_lobbyserver",
+    "build:gameserver": "npm run build -w backend_gameserver"
   },
   "keywords": [],
   "author": "",

@@ -1,5 +1,4 @@
-import {Win1252} from '../../Util/Win1252.js';
-
+import {Win1252} from 'sacredbamboo-core';
 /**
  * Body of ClientImportantMessage (SacredMsgType = 48, length 275 = 14 + 261):
  *   +0    u8    VeryImportant     1 = client shows a modal popup

@@ -1,5 +1,4 @@
-import {Win1252} from '../../Util/Win1252.js';
-
+import {Win1252} from 'sacredbamboo-core';
 /**
  * Body of AddedToFriends (53). Sent to the target of an AddFriend:
  *   +0   i32   DestinationPermId   recipient's permId (per-receiver rewrite)

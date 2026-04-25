@@ -1,6 +1,4 @@
-import {Win1252} from '../../Util/Win1252.js';
-import {LobbyResults} from './LobbyResults.js';
-
+import {LobbyResults, Win1252} from 'sacredbamboo-core';
 /**
  * Body of ClientLoginResult (SacredMsgType = 16, length 282 = 14 + 268):
  *   +0    i32   result       LobbyResults code

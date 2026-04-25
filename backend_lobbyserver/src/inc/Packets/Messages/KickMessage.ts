@@ -1,5 +1,4 @@
-import {Win1252} from '../../Util/Win1252.js';
-
+import {Win1252} from 'sacredbamboo-core';
 /**
  * Body of Kick (34), 256 bytes:
  *   +0   char Reason[256]    human-readable reason shown to the kicked user
