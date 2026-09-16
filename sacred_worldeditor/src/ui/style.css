@@ -1,0 +1,137 @@
+:root {
+    color-scheme: dark;
+    --bg:       #1a1a1c;
+    --panel:    #232327;
+    --border:   #36363c;
+    --text:     #e5e5e7;
+    --muted:    #8a8a90;
+    --accent:   #7aa2f7;
+    --selected: #2d4060;
+}
+
+* {
+    box-sizing: border-box;
+}
+
+html, body, #app {
+    margin: 0;
+    padding: 0;
+    height: 100%;
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    font-size: 12px;
+    background: var(--bg);
+    color: var(--text);
+}
+
+#app {
+    display: grid;
+    grid-template-rows: 32px 1fr;
+}
+
+#toolbar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 0 12px;
+    background: var(--panel);
+    border-bottom: 1px solid var(--border);
+}
+
+#toolbar button {
+    background: var(--accent);
+    color: #fff;
+    border: 0;
+    padding: 4px 10px;
+    border-radius: 3px;
+    font: inherit;
+    cursor: pointer;
+}
+
+#status {
+    color: var(--muted);
+}
+
+#layout {
+    display: grid;
+    grid-template-columns: 280px 1fr 320px;
+    height: 100%;
+    overflow: hidden;
+}
+
+#sidebar, #inspector {
+    background: var(--panel);
+    border-right: 1px solid var(--border);
+    overflow: auto;
+    padding: 8px 12px;
+}
+
+#inspector {
+    border-right: 0;
+    border-left: 1px solid var(--border);
+}
+
+#viewport {
+    background: #0e0e10;
+    position: relative;
+}
+
+#canvas {
+    width: 100%;
+    height: 100%;
+    display: block;
+}
+
+h2 {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--muted);
+    margin: 4px 0 8px;
+}
+
+#asset-tree {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+#asset-tree li {
+    padding: 2px 4px;
+    cursor: pointer;
+    border-radius: 2px;
+    white-space: nowrap;
+}
+
+#asset-tree li:hover {
+    background: #2a2a30;
+}
+
+#asset-tree li.selected {
+    background: var(--selected);
+}
+
+#asset-tree li .meta {
+    color: var(--muted);
+    margin-left: 6px;
+}
+
+#asset-tree li.group {
+    color: var(--muted);
+    font-weight: bold;
+    cursor: default;
+    margin-top: 8px;
+}
+
+#asset-tree li.group:hover {
+    background: transparent;
+}
+
+#inspector-body {
+    white-space: pre-wrap;
+    word-break: break-all;
+    line-height: 1.5;
+}
+
+.hex {
+    color: var(--muted);
+}

@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="de">
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width,initial-scale=1" />
+        <title>Sacred World Editor</title>
+        <link rel="stylesheet" href="/src/ui/style.css" />
+    </head>
+    <body>
+        <div id="app">
+            <header id="toolbar">
+                <button id="open-dir">Sacred Gold/ öffnen…</button>
+                <span id="status">Kein Verzeichnis geladen</span>
+            </header>
+            <main id="layout">
+                <aside id="sidebar">
+                    <h2>Assets</h2>
+                    <ul id="asset-tree"></ul>
+                </aside>
+                <section id="viewport">
+                    <canvas id="canvas"></canvas>
+                </section>
+                <aside id="inspector">
+                    <h2>Inspector</h2>
+                    <div id="inspector-body">Wähle einen Eintrag.</div>
+                </aside>
+            </main>
+        </div>
+        <script type="module" src="/src/main.ts"></script>
+    </body>
+</html>
