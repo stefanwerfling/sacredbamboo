@@ -15,10 +15,13 @@
  *          @0x24 u16 x2                 source sub-rect right edge in the atlas
  *          @0x26 u16 y2                 source sub-rect bottom edge
  *          @0x28 u32 origin             (y1<<16)|x1 — source top-left in the atlas
- *          @0x2C..                      anchor / uv floats (not yet decoded)
+ *          @0x30 f32 dx0, @0x34 f32 dy0, @0x38 f32 dx1, @0x3C f32 dy1
+ *                                       normalized DEST rect (0..1) in the composed
+ *                                       width×height sprite (@0x2C float = 0, unused).
  *
- * A frame's atlas source rect is [x1, y1, x2, y2] with x1=origin&0xFFFF,
- * y1=origin>>>16 (verified: frame 0 crops to a clean object sprite).
+ * A frame's atlas source rect is [x1, y1, x2, y2] (x1=origin&0xFFFF,
+ * y1=origin>>>16). Composite the object: for each frame, blit the atlas source
+ * rect into the sprite at [dx0*width, dy0*height, dx1*width, dy1*height].
  */
 export interface MixFrame {
     textureName:  string;
@@ -27,6 +30,11 @@ export interface MixFrame {
     y1: number;
     x2: number;
     y2: number;
+    /** Normalized DEST rect (0..1) in the composed width×height sprite. */
+    dx0: number;
+    dy0: number;
+    dx1: number;
+    dy1: number;
 }
 
 export class MixDef {
@@ -73,7 +81,11 @@ export class MixDef {
                 x1: origin & 0xffff,
                 y1: origin >>> 16,
                 x2: dv.getUint16(base + 0x24, true),
-                y2: dv.getUint16(base + 0x26, true)
+                y2: dv.getUint16(base + 0x26, true),
+                dx0: dv.getFloat32(base + 0x30, true),
+                dy0: dv.getFloat32(base + 0x34, true),
+                dx1: dv.getFloat32(base + 0x38, true),
+                dy1: dv.getFloat32(base + 0x3c, true)
             });
         }
 

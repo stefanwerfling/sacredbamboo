@@ -75,8 +75,9 @@ export interface SectorDetail {
     staticMask:   Uint8Array;
     /** Decoded floor tile textures keyed by tile index (`assetId & 0x1FFFF`). */
     tileTextures: Map<number, CanvasImageSource>;
-    /** Per cell: the primary static object's mixed.pak assetId (0 = none). */
-    staticAsset:  Uint32Array;
+    /** Per cell: the staticA / staticB objects' mixed.pak assetIds (0 = none). */
+    staticAssetA: Uint32Array;
+    staticAssetB: Uint32Array;
     /** Decoded static-object sprites keyed by mixed.pak assetId (frame 0). */
     staticSprites: Map<number, {img: CanvasImageSource; w: number; h: number}>;
 }
@@ -92,6 +93,9 @@ export interface SectorDetail {
  * trips.
  */
 export class AppState {
+
+    /** Max composited object dimension (px); larger objects stay a marker (perf/UI cap). */
+    public static readonly MAX_SPRITE_DIM = 768;
 
     public dir:          SacredGoldDir | null  = null;
     public containers:   LoadedContainer[]      = [];
@@ -196,7 +200,11 @@ export class AppState {
         }
     }
 
-    /** Decode a static object's frame-0 sprite (cropped from its texture.pak atlas). */
+    /**
+     * Composite a static object's full sprite from all its mixed.pak frames:
+     * each frame blits its texture.pak atlas source rect into the object's
+     * width×height canvas at the frame's normalized DEST rect. Cached by assetId.
+     */
     private async _resolveStaticSprite(assetId: number): Promise<{img: CanvasImageSource; w: number; h: number} | null> {
         if (this._spriteCache.has(assetId)) {
             return this._spriteCache.get(assetId)!;
@@ -207,20 +215,60 @@ export class AppState {
         if (this._mixed && this._tex && assetId > 0 && assetId < this._mixed.getDefCount()) {
             try {
                 const def = await this._mixed.getDef(assetId);
-                const f   = def.frames[0];
+                const W   = def.width;
+                const H   = def.height;
 
-                if (f && f.textureIndex < this._tex.getImageCount()) {
-                    const w = f.x2 - f.x1;
-                    const h = f.y2 - f.y1;
+                if (W > 0 && H > 0 && W <= AppState.MAX_SPRITE_DIM && H <= AppState.MAX_SPRITE_DIM && def.frames.length) {
+                    const canvas = new Uint8ClampedArray(W * H * 4);
+                    const atlases = new Map<number, {rgba: Uint8ClampedArray; width: number; height: number}>();
 
-                    if (w > 0 && h > 0) {
-                        const img  = await this._tex.readImage(f.textureIndex);
-                        const data = new ImageData(new Uint8ClampedArray(img.rgba), img.width, img.height);
-                        // crop the frame's atlas sub-rect straight out of the ImageData
-                        const bmp  = await createImageBitmap(data, f.x1, f.y1, w, h);
+                    for (const f of def.frames) {
+                        const sw = f.x2 - f.x1;
+                        const sh = f.y2 - f.y1;
 
-                        result = {img: bmp, w, h};
+                        if (sw <= 0 || sh <= 0 || f.textureIndex >= this._tex.getImageCount()) {
+                            continue;
+                        }
+
+                        if (!atlases.has(f.textureIndex)) {
+                            atlases.set(f.textureIndex, await this._tex.readImage(f.textureIndex));
+                        }
+
+                        const img = atlases.get(f.textureIndex)!;
+                        const dx  = Math.round(f.dx0 * W);
+                        const dy  = Math.round(f.dy0 * H);
+                        const dw  = Math.round((f.dx1 - f.dx0) * W);
+                        const dh  = Math.round((f.dy1 - f.dy0) * H);
+
+                        for (let y = 0; y < dh; y++) {
+                            const sy = f.y1 + (dh > 0 ? Math.floor(y * sh / dh) : 0);
+                            const py = dy + y;
+
+                            if (sy >= img.height || py < 0 || py >= H) {continue;}
+
+                            for (let x = 0; x < dw; x++) {
+                                const sx = f.x1 + (dw > 0 ? Math.floor(x * sw / dw) : 0);
+                                const px = dx + x;
+
+                                if (sx >= img.width || px < 0 || px >= W) {continue;}
+
+                                const si = (sy * img.width + sx) * 4;
+
+                                if (img.rgba[si + 3] === 0) {continue;} // keep transparency
+
+                                const di = (py * W + px) * 4;
+
+                                canvas[di]     = img.rgba[si]!;
+                                canvas[di + 1] = img.rgba[si + 1]!;
+                                canvas[di + 2] = img.rgba[si + 2]!;
+                                canvas[di + 3] = img.rgba[si + 3]!;
+                            }
+                        }
                     }
+
+                    const bmp = await createImageBitmap(new ImageData(canvas, W, H));
+
+                    result = {img: bmp, w: W, h: H};
                 }
             } catch (err) {
                 console.warn(`static sprite ${assetId} failed:`, err);
@@ -413,9 +461,11 @@ export class AppState {
             const cellCount   = sec.cellCount();
             const assetIds    = new Uint32Array(n);
             const staticMask  = new Uint8Array(n);
-            const staticAsset = new Uint32Array(n);
+            const staticAssetA = new Uint32Array(n);
+            const staticAssetB = new Uint32Array(n);
             const cellFloor   = new Uint32Array(n);
-            const cellStatic  = new Uint32Array(n); // primary Static.PAK record index (0=none)
+            const cellStaticA = new Uint32Array(n); // staticA Static.PAK record index (0=none)
+            const cellStaticB = new Uint32Array(n); // staticB Static.PAK record index (0=none)
             const uniq        = new Map<number, number>();
             const uniqStatic  = new Map<number, number>(); // static record index → mixed.pak assetId
 
@@ -426,10 +476,12 @@ export class AppState {
                 staticMask[c] = (cell.hasStaticA() ? 1 : 0) | (cell.hasStaticB() ? 2 : 0);
                 uniq.set(cell.floorIndex, 0);
 
-                const si = cell.staticA() || cell.staticB(); // primary object
-                if (staticObj && si > 0 && si < staticObj.recordCount) {
-                    cellStatic[c] = si;
-                    uniqStatic.set(si, 0);
+                if (staticObj) {
+                    const a = cell.staticA();
+                    const b = cell.staticB();
+
+                    if (a > 0 && a < staticObj.recordCount) {cellStaticA[c] = a; uniqStatic.set(a, 0);}
+                    if (b > 0 && b < staticObj.recordCount) {cellStaticB[c] = b; uniqStatic.set(b, 0);}
                 }
             }
 
@@ -453,7 +505,8 @@ export class AppState {
                 }
 
                 for (let c = 0; c < cellCount; c++) {
-                    staticAsset[c] = cellStatic[c] ? (uniqStatic.get(cellStatic[c]) ?? 0) : 0;
+                    staticAssetA[c] = cellStaticA[c] ? (uniqStatic.get(cellStaticA[c]) ?? 0) : 0;
+                    staticAssetB[c] = cellStaticB[c] ? (uniqStatic.get(cellStaticB[c]) ?? 0) : 0;
                 }
             }
 
@@ -471,7 +524,8 @@ export class AppState {
                 assetIds,
                 staticMask,
                 tileTextures,
-                staticAsset,
+                staticAssetA,
+                staticAssetB,
                 staticSprites
             };
             this.emit(); // show hash-coloured tiles immediately
@@ -508,14 +562,13 @@ export class AppState {
                 }
             }
 
-            // Progressively decode the distinct static-object sprites.
+            // Progressively decode the distinct static-object sprites (A and B).
             if (this._mixed && this._tex) {
                 const distinct = new Set<number>();
 
                 for (let c = 0; c < cellCount; c++) {
-                    if (staticAsset[c]) {
-                        distinct.add(staticAsset[c]!);
-                    }
+                    if (staticAssetA[c]) {distinct.add(staticAssetA[c]!);}
+                    if (staticAssetB[c]) {distinct.add(staticAssetB[c]!);}
                 }
 
                 let dirty = 0;

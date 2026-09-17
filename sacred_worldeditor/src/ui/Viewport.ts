@@ -203,17 +203,19 @@ export class Viewport {
                     ctx.fill();
                 }
 
-                // Static object sprite, in the same back-to-front order so nearer
-                // objects occlude farther ones. Anchored bottom-centre on the tile.
-                const sa = detail.staticAsset[idx]!;
-                const sp = sa ? detail.staticSprites.get(sa) : undefined;
+                // Static object sprites, in the same back-to-front order so nearer
+                // objects occlude farther ones. A cell may carry two objects
+                // (staticB drawn first, then staticA on top). Anchored bottom-centre.
+                // atlas-px → screen scale for object sprites (tuned so props sit
+                // roughly tile-sized without dwarfing the terrain).
+                const px = hw / 64;
 
-                if (sp) {
-                    const px = hw / 32; // atlas-px → screen (a floor tile ≈ 64 atlas px = 2*hw)
-                    const dw = sp.w * px;
-                    const dh = sp.h * px;
+                for (const sa of [detail.staticAssetB[idx]!, detail.staticAssetA[idx]!]) {
+                    const sp = sa ? detail.staticSprites.get(sa) : undefined;
 
-                    ctx.drawImage(sp.img, sx - dw / 2, sy + hh - dh, dw, dh);
+                    if (sp) {
+                        ctx.drawImage(sp.img, sx - sp.w * px / 2, sy + hh - sp.h * px, sp.w * px, sp.h * px);
+                    }
                 }
             }
         }
@@ -249,10 +251,11 @@ export class Viewport {
                 continue;
             }
 
-            const sa = detail.staticAsset[idx]!;
+            const saA = detail.staticAssetA[idx]!;
+            const saB = detail.staticAssetB[idx]!;
 
-            if (sa && detail.staticSprites.get(sa)) {
-                continue; // sprite already drawn
+            if ((saA && detail.staticSprites.get(saA)) || (saB && detail.staticSprites.get(saB))) {
+                continue; // a sprite was drawn for this cell
             }
 
             const row = Math.floor(idx / g);

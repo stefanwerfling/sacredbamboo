@@ -2,8 +2,10 @@ import assert from 'node:assert/strict';
 import {test} from 'node:test';
 import {BufferRandomAccess, MixDef, MixedReader} from '../src/index.js';
 
+interface FrameSpec {name: string; texIndex: number; x1: number; y1: number; x2: number; y2: number; dx0?: number; dy0?: number; dx1?: number; dy1?: number}
+
 /** Build a MixDef record: 16B header + `frames` × 64B frame sub-records. */
-const buildRecord = (width: number, height: number, frames: {name: string; texIndex: number; x1: number; y1: number; x2: number; y2: number}[]): ArrayBuffer => {
+const buildRecord = (width: number, height: number, frames: FrameSpec[]): ArrayBuffer => {
     const buf = new ArrayBuffer(MixDef.HEADER_SIZE + frames.length * MixDef.FRAME_SIZE);
     const u8  = new Uint8Array(buf);
     const dv  = new DataView(buf);
@@ -20,6 +22,10 @@ const buildRecord = (width: number, height: number, frames: {name: string; texIn
         dv.setUint16(base + 0x24, f.x2, true);
         dv.setUint16(base + 0x26, f.y2, true);
         dv.setUint32(base + 0x28, ((f.y1 & 0xffff) << 16) | (f.x1 & 0xffff), true);
+        dv.setFloat32(base + 0x30, f.dx0 ?? 0, true);
+        dv.setFloat32(base + 0x34, f.dy0 ?? 0, true);
+        dv.setFloat32(base + 0x38, f.dx1 ?? 0, true);
+        dv.setFloat32(base + 0x3c, f.dy1 ?? 0, true);
     });
 
     return buf;
@@ -27,7 +33,7 @@ const buildRecord = (width: number, height: number, frames: {name: string; texIn
 
 test('MixDef.parse reads header + frame source rects (origin = y1<<16|x1)', () => {
     const rec = buildRecord(105, 90, [
-        {name: 'MIX0.444', texIndex: 14944, x1: 11, y1: 0, x2: 75, y2: 64},
+        {name: 'MIX0.444', texIndex: 14944, x1: 11, y1: 0, x2: 75, y2: 64, dx0: 0, dy0: 0, dx1: 0.25, dy1: 0.5},
         {name: 'MIX0.444', texIndex: 14944, x1: 75, y1: 6, x2: 107, y2: 70}
     ]);
     const d = MixDef.parse(rec);
@@ -37,7 +43,7 @@ test('MixDef.parse reads header + frame source rects (origin = y1<<16|x1)', () =
     assert.equal(d.height, 90);
     assert.equal(d.frames.length, 2);
 
-    assert.deepEqual(d.frames[0], {textureName: 'MIX0.444', textureIndex: 14944, x1: 11, y1: 0, x2: 75, y2: 64});
+    assert.deepEqual(d.frames[0], {textureName: 'MIX0.444', textureIndex: 14944, x1: 11, y1: 0, x2: 75, y2: 64, dx0: 0, dy0: 0, dx1: 0.25, dy1: 0.5});
     assert.equal(d.frames[1]!.x1, 75);
     assert.equal(d.frames[1]!.y1, 6);
     assert.equal(d.frames[1]!.x2, 107);
