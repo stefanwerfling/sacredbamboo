@@ -27,6 +27,7 @@ export {WldHeader, WldReader} from './Containers/WldReader.js';
 export {IsoTilesReader} from './Containers/IsoTilesReader.js';
 export {TexReader} from './Containers/TexReader.js';
 export type {TexImageInfo} from './Containers/TexReader.js';
+export {MixedReader} from './Containers/MixedReader.js';
 
 // Records — typed views over the bytes ObjReader/TrgReader/WlkReader hand out
 export {FloorRecord}  from './Records/FloorRecord.js';
@@ -36,3 +37,5 @@ export {WldSector}   from './Records/WldSector.js';
 export {WldCell}     from './Records/WldCell.js';
 export {IsoTile}     from './Records/IsoTile.js';
 export {TexImage}    from './Records/TexImage.js';
+export {MixDef}      from './Records/MixDef.js';
+export type {MixFrame} from './Records/MixDef.js';

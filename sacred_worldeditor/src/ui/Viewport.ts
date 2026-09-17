@@ -202,6 +202,19 @@ export class Viewport {
                     ctx.fillStyle = Viewport._colorFor(asset);
                     ctx.fill();
                 }
+
+                // Static object sprite, in the same back-to-front order so nearer
+                // objects occlude farther ones. Anchored bottom-centre on the tile.
+                const sa = detail.staticAsset[idx]!;
+                const sp = sa ? detail.staticSprites.get(sa) : undefined;
+
+                if (sp) {
+                    const px = hw / 32; // atlas-px → screen (a floor tile ≈ 64 atlas px = 2*hw)
+                    const dw = sp.w * px;
+                    const dh = sp.h * px;
+
+                    ctx.drawImage(sp.img, sx - dw / 2, sy + hh - dh, dw, dh);
+                }
             }
         }
 
@@ -225,7 +238,8 @@ export class Viewport {
             }
         }
 
-        // Static-object markers.
+        // Fallback markers: a dot only where a static object has no decoded sprite
+        // (sprites unavailable, still loading, or unresolved assetId).
         const dot = Math.max(1.5, Math.min(hw, hh) * 0.45);
 
         for (let idx = 0; idx < g * g; idx++) {
@@ -235,20 +249,20 @@ export class Viewport {
                 continue;
             }
 
+            const sa = detail.staticAsset[idx]!;
+
+            if (sa && detail.staticSprites.get(sa)) {
+                continue; // sprite already drawn
+            }
+
             const row = Math.floor(idx / g);
             const col = idx % g;
             const {sx, sy} = this._cellToScreen(col, row, geom);
 
             ctx.beginPath();
             ctx.arc(sx, sy, dot, 0, Math.PI * 2);
-            ctx.fillStyle = (m & 1) ? '#ffd76a' : '#ff9d5c'; // A vs B-only
+            ctx.fillStyle = (m & 1) ? '#ffd76a' : '#ff9d5c';
             ctx.fill();
-
-            if ((m & 3) === 3) { // both A and B
-                ctx.strokeStyle = '#ff6a6a';
-                ctx.lineWidth   = 1;
-                ctx.stroke();
-            }
         }
 
         // Active-cell highlight.

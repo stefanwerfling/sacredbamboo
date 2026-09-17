@@ -1,4 +1,4 @@
-import {inflate}       from 'pako';
+import {Inflate}       from 'pako';
 import {IRandomAccess} from '../Util/IRandomAccess.js';
 import {PakHeader}     from '../Pak/PakHeader.js';
 import {TexImage}      from '../Records/TexImage.js';
@@ -31,6 +31,7 @@ export class TexReader {
 
     private _header:  PakHeader | null    = null;
     private _entries: DataView | null     = null; // the raw 12B-row table
+    private _offsetsSorted: number[]      = [];   // ascending entry data offsets
 
     public constructor(private readonly _src: IRandomAccess) {}
 
@@ -48,6 +49,31 @@ export class TexReader {
         const tbl = await this._src.read(PakHeader.SIZE, this._header.entryCount * 12);
 
         this._entries = new DataView(tbl);
+
+        // The compressed length is NOT reliably stored (repeat_compr_size holds the
+        // *uncompressed* size for MIX atlases), so bound each image's payload by the
+        // next entry's offset. inflate() stops at the zlib stream end anyway.
+        const offs: number[] = [];
+
+        for (let i = 0; i < this._header.entryCount; i++) {
+            offs.push(this._entries.getUint32(i * 12 + 4, true));
+        }
+
+        offs.sort((a, b) => a - b);
+        this._offsetsSorted = offs;
+    }
+
+    /** End of image `index`'s payload region: the next entry's offset, or EOF. */
+    private _dataEnd(off: number): number {
+        const arr = this._offsetsSorted;
+
+        for (let i = 0; i < arr.length; i++) {
+            if (arr[i]! > off) {
+                return arr[i]!;
+            }
+        }
+
+        return this._src.size();
     }
 
     public getImageCount(): number {
@@ -69,21 +95,28 @@ export class TexReader {
     /** Decode image `index` to RGBA. */
     public async readImage(index: number): Promise<TexImage> {
         const off  = this._entryOffset(index);
-        const csz  = this._entrySize(index);
         const hb   = new Uint8Array(await this._src.read(off, TexReader.IMG_HEADER_SIZE));
         const info = TexReader._parseImageHeader(hb);
-        const dv   = new DataView(hb.buffer, hb.byteOffset, hb.byteLength);
-        const zlen = dv.getUint32(37, true) || (csz - TexReader.IMG_HEADER_SIZE); // repeat_compr_size
+        const dataOff = off + TexReader.IMG_HEADER_SIZE;
 
         if (info.typeId === 6) {
-            const raw = new Uint8Array(await this._src.read(off + TexReader.IMG_HEADER_SIZE, info.width * info.height * 4));
+            const raw = new Uint8Array(await this._src.read(dataOff, info.width * info.height * 4));
 
             return TexImage.from32bpp(info.name, info.width, info.height, raw);
         }
 
         // type 4 (and anything else zlib-compressed) → inflate then treat as ARGB4444.
-        const zbuf = new Uint8Array(await this._src.read(off + TexReader.IMG_HEADER_SIZE, zlen));
-        const raw  = inflate(zbuf);
+        const zbuf = new Uint8Array(await this._src.read(dataOff, this._dataEnd(off) - dataOff));
+        // Inflate stops at the zlib stream end and ignores trailing bytes from the next entry.
+        const inflator = new Inflate();
+
+        inflator.push(zbuf, true);
+
+        if (inflator.err) {
+            throw new Error(`TexReader: inflate failed for image ${index} ("${info.name}"): ${inflator.msg}`);
+        }
+
+        const raw = inflator.result as Uint8Array;
 
         return TexImage.fromArgb4444(info.name, info.width, info.height, raw);
     }
@@ -109,12 +142,6 @@ export class TexReader {
         const dv = this._reqEntries(index);
 
         return dv.getUint32(index * 12 + 4, true);
-    }
-
-    private _entrySize(index: number): number {
-        const dv = this._reqEntries(index);
-
-        return dv.getUint32(index * 12 + 8, true);
     }
 
     private _reqEntries(index: number): DataView {

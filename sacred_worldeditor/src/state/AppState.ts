@@ -2,8 +2,10 @@ import {
     FileRandomAccess,
     FloorRecord,
     IsoTilesReader,
+    MixedReader,
     ObjReader,
     PakEntry,
+    StaticRecord,
     TexReader,
     TrgReader,
     WldReader,
@@ -73,6 +75,10 @@ export interface SectorDetail {
     staticMask:   Uint8Array;
     /** Decoded floor tile textures keyed by tile index (`assetId & 0x1FFFF`). */
     tileTextures: Map<number, CanvasImageSource>;
+    /** Per cell: the primary static object's mixed.pak assetId (0 = none). */
+    staticAsset:  Uint32Array;
+    /** Decoded static-object sprites keyed by mixed.pak assetId (frame 0). */
+    staticSprites: Map<number, {img: CanvasImageSource; w: number; h: number}>;
 }
 
 /**
@@ -101,7 +107,10 @@ export class AppState {
     // Tile-texture pipeline (pak/tiles.pak → pak/texture.pak), loaded lazily.
     private _isoTiles: IsoTilesReader | null                 = null;
     private _tex:      TexReader | null                      = null;
-    private readonly _texCache = new Map<number, CanvasImageSource>(); // by tile index
+    private _mixed:    MixedReader | null                    = null;
+    private readonly _texCache    = new Map<number, CanvasImageSource>(); // by tile index
+    // Static-object sprites (mixed.pak assetId → decoded frame-0 sprite).
+    private readonly _spriteCache = new Map<number, {img: CanvasImageSource; w: number; h: number} | null>();
 
     public subscribe(fn: () => void): () => void {
         this._listeners.add(fn);
@@ -123,7 +132,9 @@ export class AppState {
         this.activeCell   = null;
         this._isoTiles    = null;
         this._tex         = null;
+        this._mixed       = null;
         this._texCache.clear();
+        this._spriteCache.clear();
 
         try {
             const file   = await dir.getFile('World/Triggers.PAK');
@@ -172,6 +183,53 @@ export class AppState {
         } catch (err) {
             console.warn('tile textures unavailable (pak/tiles.pak / pak/texture.pak):', err);
         }
+
+        // Static-object sprites (pak/mixed.pak → texture.pak atlases). Optional.
+        try {
+            const mixFile = await this.dir.getFile('pak/mixed.pak');
+            const mixed   = new MixedReader(new FileRandomAccess(mixFile));
+
+            await mixed.open();
+            this._mixed = mixed;
+        } catch (err) {
+            console.warn('static sprites unavailable (pak/mixed.pak):', err);
+        }
+    }
+
+    /** Decode a static object's frame-0 sprite (cropped from its texture.pak atlas). */
+    private async _resolveStaticSprite(assetId: number): Promise<{img: CanvasImageSource; w: number; h: number} | null> {
+        if (this._spriteCache.has(assetId)) {
+            return this._spriteCache.get(assetId)!;
+        }
+
+        let result: {img: CanvasImageSource; w: number; h: number} | null = null;
+
+        if (this._mixed && this._tex && assetId > 0 && assetId < this._mixed.getDefCount()) {
+            try {
+                const def = await this._mixed.getDef(assetId);
+                const f   = def.frames[0];
+
+                if (f && f.textureIndex < this._tex.getImageCount()) {
+                    const w = f.x2 - f.x1;
+                    const h = f.y2 - f.y1;
+
+                    if (w > 0 && h > 0) {
+                        const img  = await this._tex.readImage(f.textureIndex);
+                        const data = new ImageData(new Uint8ClampedArray(img.rgba), img.width, img.height);
+                        // crop the frame's atlas sub-rect straight out of the ImageData
+                        const bmp  = await createImageBitmap(data, f.x1, f.y1, w, h);
+
+                        result = {img: bmp, w, h};
+                    }
+                }
+            } catch (err) {
+                console.warn(`static sprite ${assetId} failed:`, err);
+            }
+        }
+
+        this._spriteCache.set(assetId, result);
+
+        return result;
     }
 
     /** Decode one floor tile index → an ImageBitmap, cached across sectors. */
@@ -345,15 +403,21 @@ export class AppState {
         const floor = this.containers.find(
             (c): c is LoadedObj => c.kind === 'obj' && c.name.endsWith('Floor.PAK')
         );
+        const staticObj = this.containers.find(
+            (c): c is LoadedObj => c.kind === 'obj' && c.name.endsWith('Static.PAK')
+        );
 
         try {
-            const sec        = WldSector.parse(await target.wld.reader.readSector(target.sectorIndex));
-            const n          = WldSector.CELL_COUNT;
-            const cellCount  = sec.cellCount();
-            const assetIds   = new Uint32Array(n);
-            const staticMask = new Uint8Array(n);
-            const cellFloor  = new Uint32Array(n);
-            const uniq       = new Map<number, number>();
+            const sec         = WldSector.parse(await target.wld.reader.readSector(target.sectorIndex));
+            const n           = WldSector.CELL_COUNT;
+            const cellCount   = sec.cellCount();
+            const assetIds    = new Uint32Array(n);
+            const staticMask  = new Uint8Array(n);
+            const staticAsset = new Uint32Array(n);
+            const cellFloor   = new Uint32Array(n);
+            const cellStatic  = new Uint32Array(n); // primary Static.PAK record index (0=none)
+            const uniq        = new Map<number, number>();
+            const uniqStatic  = new Map<number, number>(); // static record index → mixed.pak assetId
 
             for (let c = 0; c < cellCount; c++) {
                 const cell = sec.getCell(c);
@@ -361,6 +425,12 @@ export class AppState {
                 cellFloor[c]  = cell.floorIndex;
                 staticMask[c] = (cell.hasStaticA() ? 1 : 0) | (cell.hasStaticB() ? 2 : 0);
                 uniq.set(cell.floorIndex, 0);
+
+                const si = cell.staticA() || cell.staticB(); // primary object
+                if (staticObj && si > 0 && si < staticObj.recordCount) {
+                    cellStatic[c] = si;
+                    uniqStatic.set(si, 0);
+                }
             }
 
             // Resolve each distinct floor record once (≈ a couple hundred reads).
@@ -376,11 +446,23 @@ export class AppState {
                 }
             }
 
+            // Resolve each distinct static record → its mixed.pak assetId.
+            if (staticObj) {
+                for (const si of uniqStatic.keys()) {
+                    uniqStatic.set(si, StaticRecord.parse(await staticObj.reader.readRecord(si)).assetId);
+                }
+
+                for (let c = 0; c < cellCount; c++) {
+                    staticAsset[c] = cellStatic[c] ? (uniqStatic.get(cellStatic[c]) ?? 0) : 0;
+                }
+            }
+
             if (token !== this._detailToken) {
                 return; // a newer selection superseded this load
             }
 
-            const tileTextures = new Map<number, CanvasImageSource>();
+            const tileTextures  = new Map<number, CanvasImageSource>();
+            const staticSprites = new Map<number, {img: CanvasImageSource; w: number; h: number}>();
 
             this.sectorDetail = {
                 containerIdx: target.wldIdx,
@@ -388,7 +470,9 @@ export class AppState {
                 name:         sec.getName(),
                 assetIds,
                 staticMask,
-                tileTextures
+                tileTextures,
+                staticAsset,
+                staticSprites
             };
             this.emit(); // show hash-coloured tiles immediately
 
@@ -413,6 +497,39 @@ export class AppState {
                         tileTextures.set(ti, bmp);
 
                         // Repaint in small batches so tiles fill in visibly.
+                        if (++dirty % 8 === 0) {
+                            this.emit();
+                        }
+                    }
+                }
+
+                if (token === this._detailToken) {
+                    this.emit();
+                }
+            }
+
+            // Progressively decode the distinct static-object sprites.
+            if (this._mixed && this._tex) {
+                const distinct = new Set<number>();
+
+                for (let c = 0; c < cellCount; c++) {
+                    if (staticAsset[c]) {
+                        distinct.add(staticAsset[c]!);
+                    }
+                }
+
+                let dirty = 0;
+
+                for (const a of distinct) {
+                    if (token !== this._detailToken) {
+                        return;
+                    }
+
+                    const sprite = await this._resolveStaticSprite(a);
+
+                    if (sprite) {
+                        staticSprites.set(a, sprite);
+
                         if (++dirty % 8 === 0) {
                             this.emit();
                         }

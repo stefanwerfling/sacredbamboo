@@ -18,7 +18,7 @@
   "scripts": {
     "build": "npm run compile",
     "compile": "tsc --project tsconfig.json",
-    "test": "tsx --test tests/FloorRecord.test.ts tests/IRandomAccess.test.ts tests/ObjReader.test.ts tests/PakHeader.test.ts tests/PakReader.test.ts tests/TrgReader.test.ts tests/WlkReader.test.ts tests/WlkSector.test.ts tests/WldReader.test.ts tests/WldCell.test.ts tests/StaticRecord.test.ts tests/IsoTile.test.ts tests/TexReader.test.ts"
+    "test": "tsx --test tests/FloorRecord.test.ts tests/IRandomAccess.test.ts tests/ObjReader.test.ts tests/PakHeader.test.ts tests/PakReader.test.ts tests/TrgReader.test.ts tests/WlkReader.test.ts tests/WlkSector.test.ts tests/WldReader.test.ts tests/WldCell.test.ts tests/StaticRecord.test.ts tests/IsoTile.test.ts tests/TexReader.test.ts tests/MixDef.test.ts"
   },
   "devDependencies": {
     "tsx": "^4.19.0",
