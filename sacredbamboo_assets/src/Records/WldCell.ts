@@ -25,10 +25,24 @@
  *                        is present (tentative "has-extended-data" marker).
  *   @0x18  corners       four independent bytes, mostly 0/1 — likely per-corner
  *                        tile flags (blend / height-step / walkable).
- *   @0x1C  flags         low 3 bytes 0; byte @0x1F is a flags/type byte
- *                        (observed 0x31/0x40/0x41/0xc0/0xd1/0xd2/…; bit 0x40
- *                        correlates strongly with staticIndexB being present).
+ *   @0x1C  flags         low 3 bytes 0; byte @0x1F is a nibble-packed tile
+ *                        selector (see getFlagsByte()/behavior()/terrainSurface()).
+ *
+ * `@0x1F` nibble layout — verified 2026-10-14 over 1.65M retail cells
+ * (`scripts/verify_tile_byte.ts`; offsets hinted by [[reference-
+ * sacredengineremake]]'s WldxTileRecord, confirmed here):
+ *   low nibble  = navigation behavior. 0/1,654,784 cells held an undocumented
+ *                 value. Observed in retail: None(0), BlockerA(1), BlockerB(2),
+ *                 StairsUp(5), StairsUp2(7), IndoorEntry(9), IndoorExit(0xA).
+ *                 StairsDown(6)/StairsDown2(8) documented but unseen outdoors.
+ *   high nibble = terrain surface. All 16 values 0x00..0xF0 occur; 0x90/0xA0
+ *                 are the two authored liquid surfaces (0x80 = liquid-family bit).
  */
+export type WldCellBehavior =
+    | 'None' | 'BlockerA' | 'BlockerB'
+    | 'StairsUp' | 'StairsDown' | 'StairsUp2' | 'StairsDown2'
+    | 'IndoorEntry' | 'IndoorExit' | 'Unknown';
+
 export class WldCell {
 
     public static readonly SIZE           = 32;
@@ -110,9 +124,63 @@ export class WldCell {
         ];
     }
 
-    /** The flags/type byte (`@0x1F`, the high byte of `flags`). */
+    /** The nibble-packed tile selector byte (`@0x1F`, the high byte of `flags`). */
     public getFlagsByte(): number {
         return (this.flags >>> 24) & 0xff;
+    }
+
+    /** Navigation behavior — low nibble of `@0x1F`. */
+    public behavior(): number {
+        return this.getFlagsByte() & 0x0f;
+    }
+
+    /** Named navigation behavior, or 'Unknown' for values outside the enum. */
+    public behaviorName(): WldCellBehavior {
+        switch (this.behavior()) {
+            case 0x0: return 'None';
+            case 0x1: return 'BlockerA';
+            case 0x2: return 'BlockerB';
+            case 0x5: return 'StairsUp';
+            case 0x6: return 'StairsDown';
+            case 0x7: return 'StairsUp2';
+            case 0x8: return 'StairsDown2';
+            case 0x9: return 'IndoorEntry';
+            case 0xa: return 'IndoorExit';
+            default:  return 'Unknown';
+        }
+    }
+
+    /** Terrain surface selector — high nibble of `@0x1F` (0x00..0xF0). */
+    public terrainSurface(): number {
+        return this.getFlagsByte() & 0xf0;
+    }
+
+    /** True for a movement-blocking tile (BlockerA ground+air, BlockerB ground-only). */
+    public isMovementBlocker(): boolean {
+        const b = this.behavior();
+
+        return b === 0x1 || b === 0x2;
+    }
+
+    /** True for any stairs behavior (up/down, single/two-level). */
+    public isStairs(): boolean {
+        const b = this.behavior();
+
+        return b >= 0x5 && b <= 0x8;
+    }
+
+    /** True for an indoor entry/exit portal tile. */
+    public isIndoorPortal(): boolean {
+        const b = this.behavior();
+
+        return b === 0x9 || b === 0xa;
+    }
+
+    /** True for one of the two authored liquid surfaces (0x90 / 0xA0). */
+    public isLiquidSurface(): boolean {
+        const s = this.terrainSurface();
+
+        return s === 0x90 || s === 0xa0;
     }
 
     /** True when `extSentinel` is the 0xFFFFFFFF "no extended data" marker. */

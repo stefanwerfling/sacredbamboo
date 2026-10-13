@@ -63,6 +63,19 @@ export class Inspector {
         const range   = c.reader.getSectorRange(idx);
         const body    = sec.getBody();
         const tail    = sec.getTail();
+
+        // Navigation summary from the @0x1F tile byte of every cell.
+        let blockers = 0, stairs = 0, portals = 0, liquid = 0;
+
+        for (let i = 0; i < sec.cellCount(); i++) {
+            const cell = sec.getCell(i);
+
+            if (cell.isMovementBlocker()) {blockers++;}
+            if (cell.isStairs())          {stairs++;}
+            if (cell.isIndoorPortal())    {portals++;}
+            if (cell.isLiquidSurface())   {liquid++;}
+        }
+
         const lines   = [
             'WldSector',
             `  name:         "${sec.getName()}"`,
@@ -70,6 +83,7 @@ export class Inspector {
             `  base-sized:   ${sec.isBaseSized() ? 'yes (94 % case, 131,396 B)' : `no (+${tail.byteLength.toLocaleString('de-DE')} B variable tail)`}`,
             `  compressed:   ${range.length.toLocaleString('de-DE')} bytes @ 0x${range.offset.toString(16)}`,
             `  ratio:        ${(sec.getSize() / range.length).toFixed(1)}×`,
+            `  navigation:   ${blockers} blockers · ${stairs} stairs · ${portals} indoor portals · ${liquid} liquid  (of ${sec.cellCount()} cells)`,
             '',
             'Body (first 256B after 32B name block):',
             Inspector._hexDump(body.subarray(0, Math.min(256, body.byteLength)), 256)

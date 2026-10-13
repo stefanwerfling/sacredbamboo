@@ -54,6 +54,40 @@ test('WldCell.parse reads all eight u32 lanes from the documented offsets', () =
     assert.equal(c.flags >>> 0,  0xd1000000);
 });
 
+test('WldCell @0x1F splits into behavior (low nibble) and terrain surface (high nibble)', () => {
+    // flags byte 0xd1 → behavior 0x1 (BlockerA), surface 0xd0
+    const a = WldCell.parse(WldCellFixture.build({flags: 0xd1000000}).buf);
+
+    assert.equal(a.getFlagsByte(),   0xd1);
+    assert.equal(a.behavior(),       0x1);
+    assert.equal(a.behaviorName(),   'BlockerA');
+    assert.equal(a.terrainSurface(), 0xd0);
+    assert.equal(a.isMovementBlocker(), true);
+    assert.equal(a.isStairs(),          false);
+    assert.equal(a.isIndoorPortal(),    false);
+    assert.equal(a.isLiquidSurface(),   false);
+
+    // 0x9a → behavior 0xA (IndoorExit), surface 0x90 (liquid A)
+    const b = WldCell.parse(WldCellFixture.build({flags: 0x9a000000}).buf);
+
+    assert.equal(b.behaviorName(),    'IndoorExit');
+    assert.equal(b.isIndoorPortal(),  true);
+    assert.equal(b.terrainSurface(),  0x90);
+    assert.equal(b.isLiquidSurface(), true);
+
+    // 0x07 → StairsUp2, surface 0x00
+    const c = WldCell.parse(WldCellFixture.build({flags: 0x07000000}).buf);
+
+    assert.equal(c.behaviorName(), 'StairsUp2');
+    assert.equal(c.isStairs(),     true);
+
+    // 0x3b → behavior 0xB is not a documented value → Unknown
+    const d = WldCell.parse(WldCellFixture.build({flags: 0x3b000000}).buf);
+
+    assert.equal(d.behaviorName(), 'Unknown');
+    assert.equal(d.terrainSurface(), 0x30);
+});
+
 test('WldCell helpers: static presence, corners, flags byte, sentinel', () => {
     const {buf} = WldCellFixture.build({
         staticIndexA: 5,
