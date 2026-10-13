@@ -27,6 +27,9 @@
  * out of the parsed object so this class stays a pure bytes-to-fields view
  * matching `FloorRecord.parse(buf)`. Callers obtain it from `WlkHeader`.
  */
+/** Compass directions of the 8 neighbor slots, clockwise from NW. */
+export type WlkNeighborDirection = 'NW' | 'N' | 'NE' | 'E' | 'SE' | 'S' | 'SW' | 'W';
+
 export interface WlkSectorFields {
     compressedOffset:    number;
     compressedSize:      number;
@@ -177,9 +180,41 @@ export class WlkSector {
         );
     }
 
+    /**
+     * Compass direction of each of the 8 `neighbors` slots, pinned 2026-10-14
+     * via `scripts/decode_neighbor_slots.ts` — every slot maps to exactly one
+     * (dRow,dCol) with 100% consistency across all sectors. Clockwise from NW.
+     */
+    public static readonly NEIGHBOR_DIRECTIONS: readonly WlkNeighborDirection[] =
+        ['NW', 'N', 'NE', 'E', 'SE', 'S', 'SW', 'W'];
+
+    /** Grid (dRow, dCol) step for each slot, same index order as NEIGHBOR_DIRECTIONS. */
+    public static readonly NEIGHBOR_DELTAS: readonly [number, number][] =
+        [[-1, -1], [-1, 0], [-1, 1], [0, 1], [1, 1], [1, 0], [1, -1], [0, -1]];
+
     /** Non-zero neighbor ordinals only (drops the 0 = "no neighbor" slots). */
     public neighborOrdinals(): number[] {
         return this.neighbors.filter((n) => n !== 0);
+    }
+
+    /** Present neighbors paired with their compass direction (skips empty slots). */
+    public neighborsByDirection(): {direction: WlkNeighborDirection; ordinal: number}[] {
+        const out: {direction: WlkNeighborDirection; ordinal: number}[] = [];
+
+        for (let k = 0; k < WlkSector.NEIGHBOR_COUNT; k++) {
+            const ordinal = this.neighbors[k]!;
+
+            if (ordinal !== 0) {
+                out.push({direction: WlkSector.NEIGHBOR_DIRECTIONS[k]!, ordinal});
+            }
+        }
+
+        return out;
+    }
+
+    /** The neighbor ordinal in a given compass direction, or 0 if none / edge. */
+    public neighborInDirection(direction: WlkNeighborDirection): number {
+        return this.neighbors[WlkSector.NEIGHBOR_DIRECTIONS.indexOf(direction)] ?? 0;
     }
 
     /** Decompose `gridIndex` into (row, col) using the WLK header's gridWidth. */

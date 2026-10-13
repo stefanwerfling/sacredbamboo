@@ -106,6 +106,39 @@ test('WlkSector.parse extracts neighbors, raw world bounds and env/nature/liquid
     assert.equal(s.liquidStyleB,     2);
 });
 
+test('WlkSector neighbor slots map to compass directions (clockwise from NW)', () => {
+    // slot:        0=NW 1=N 2=NE 3=E 4=SE 5=S 6=SW 7=W
+    const {buf} = WlkSectorFixture.build(2701, 1661, {
+        neighbors: [11, 12, 13, 14, 15, 16, 17, 18]
+    });
+    const s = WlkSector.parse(buf);
+
+    assert.deepEqual(s.neighborsByDirection(), [
+        {direction: 'NW', ordinal: 11},
+        {direction: 'N',  ordinal: 12},
+        {direction: 'NE', ordinal: 13},
+        {direction: 'E',  ordinal: 14},
+        {direction: 'SE', ordinal: 15},
+        {direction: 'S',  ordinal: 16},
+        {direction: 'SW', ordinal: 17},
+        {direction: 'W',  ordinal: 18}
+    ]);
+
+    assert.equal(s.neighborInDirection('N'), 12);
+    assert.equal(s.neighborInDirection('W'), 18);
+});
+
+test('WlkSector.neighborsByDirection skips empty (0) slots', () => {
+    const {buf} = WlkSectorFixture.build(0, 1, {neighbors: [0, 50, 0, 0, 0, 60, 0, 0]});
+    const s     = WlkSector.parse(buf);
+
+    assert.deepEqual(s.neighborsByDirection(), [
+        {direction: 'N', ordinal: 50},
+        {direction: 'S', ordinal: 60}
+    ]);
+    assert.equal(s.neighborInDirection('NW'), 0);
+});
+
 test('WlkSector.parse reads signed negative raw coordinates', () => {
     const {buf} = WlkSectorFixture.build(0, 1, {rawX: -18432, rawY: -5});
     const s     = WlkSector.parse(buf);

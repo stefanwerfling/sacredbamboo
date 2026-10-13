@@ -89,7 +89,7 @@ export class Inspector {
             'WlkSector',
             `  gridIndex:  ${s.gridIndex}   →   (row=${row}, col=${col}) in ${c.gridWidth}×${c.gridHeight} grid`,
             `  ordinal:    ${s.ordinal}   (1..${c.sectorCount} sector id; neighbors reference this)`,
-            `  neighbors:  [${s.neighborOrdinals().join(', ') || '—'}]   (adjacent sector ids)`,
+            `  neighbors:  ${s.neighborsByDirection().map((n) => `${n.direction} ${n.ordinal}`).join('  ') || '—'}`,
             `  world:      origin (${s.rawX}, ${s.rawY}) → (${s.rawEndX}, ${s.rawEndY})`,
             `  wldx:       offset ${hex(s.compressedOffset)}  size ${s.compressedSize}   · tiles +${hex(s.tilesRelativeOffset)}/${s.tilesSize}B`,
             `  env:        flags ${hex(s.environmentFlags)}  nature ${hex(s.natureType)}  liquid ${s.liquidStyleA}/${s.liquidStyleB}  rev ${s.serverRevisionId}`,
