@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
-import {BufferRandomAccess, WlkHeader, WlkReader} from '../src/index.js';
+import {BufferRandomAccess, WlkHeader, WlkReader, WlkSector} from '../src/index.js';
 
 class WlkFixture {
 
@@ -12,6 +12,8 @@ class WlkFixture {
         originA?:   number;
         originB?:   number;
         truncateBy?: number;
+        // Per-sector wldx pointers written at @0xEC (offset) / @0xF0 (length).
+        wldx?:      {offset: number; length: number}[];
     }): ArrayBuffer {
         const sectorSize = WlkReader.SECTOR_SIZE;
         const total      = WlkHeader.SIZE + sectorCount * sectorSize - (opts?.truncateBy ?? 0);
@@ -37,6 +39,13 @@ class WlkFixture {
 
             if (off + 1 <= total) {
                 u8[off] = i & 0xff;
+            }
+
+            const wldx = opts?.wldx?.[i];
+
+            if (wldx && off + WlkSector.COMPRESSED_SIZE_OFFSET + 4 <= total) {
+                dv.setUint32(off + WlkSector.COMPRESSED_OFFSET_OFFSET, wldx.offset, true);
+                dv.setUint32(off + WlkSector.COMPRESSED_SIZE_OFFSET,   wldx.length, true);
             }
         }
 
@@ -107,6 +116,27 @@ test('WlkReader.readSector rejects out-of-range indices', async () => {
 
 test('WlkReader.SECTOR_SIZE matches the 0x300 documented for sectors.keyx', () => {
     assert.equal(WlkReader.SECTOR_SIZE, 0x300);
+});
+
+test('WlkReader.getWldxSectorIndex lifts @0xEC/@0xF0 into an interleaved [offset,length] index', async () => {
+    const wldx = [
+        {offset: 0x100,   length: 957},
+        {offset: 0x4bd,   length: 16870},
+        {offset: 0x46a3,  length: 8062}
+    ];
+    const buf = WlkFixture.build(3, {wldx});
+    const r   = new WlkReader(new BufferRandomAccess(buf));
+
+    await r.open();
+
+    const index = await r.getWldxSectorIndex();
+
+    assert.equal(index.length, 3 * 2);
+
+    for (let i = 0; i < wldx.length; i++) {
+        assert.equal(index[i * 2],     wldx[i]!.offset, `sector ${i} offset`);
+        assert.equal(index[i * 2 + 1], wldx[i]!.length, `sector ${i} length`);
+    }
 });
 
 test('WlkReader.readAllSectorsBlob returns the entire sector region in one shot', async () => {

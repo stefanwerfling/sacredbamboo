@@ -5,16 +5,24 @@ import {WlkSector} from '../src/index.js';
 class WlkSectorFixture {
 
     public static build(gridIndex: number, ordinal: number, opts?: {
-        size?:      number;
-        byteOffset?: number;
+        size?:        number;
+        byteOffset?:  number;
+        compOffset?:  number;
+        compSize?:    number;
+        tilesOffset?: number;
+        tilesSize?:   number;
     }): {buf: ArrayBuffer; byteOffset: number} {
         const sectorSize = opts?.size       ?? WlkSector.SIZE;
         const before     = opts?.byteOffset ?? 0;
         const buf        = new ArrayBuffer(before + sectorSize);
         const dv         = new DataView(buf);
 
-        dv.setUint32(before + WlkSector.GRID_INDEX_OFFSET, gridIndex, true);
-        dv.setUint32(before + WlkSector.ORDINAL_OFFSET,    ordinal,   true);
+        dv.setUint32(before + WlkSector.GRID_INDEX_OFFSET,        gridIndex,             true);
+        dv.setUint32(before + WlkSector.ORDINAL_OFFSET,           ordinal,               true);
+        dv.setUint32(before + WlkSector.COMPRESSED_OFFSET_OFFSET, opts?.compOffset  ?? 0, true);
+        dv.setUint32(before + WlkSector.COMPRESSED_SIZE_OFFSET,   opts?.compSize    ?? 0, true);
+        dv.setUint32(before + WlkSector.TILES_OFFSET_OFFSET,      opts?.tilesOffset ?? 0, true);
+        dv.setUint32(before + WlkSector.TILES_SIZE_OFFSET,        opts?.tilesSize   ?? 0, true);
 
         return {buf, byteOffset: before};
     }
@@ -27,6 +35,21 @@ test('WlkSector.parse extracts gridIndex and ordinal from the documented offsets
 
     assert.equal(s.gridIndex, 1500);
     assert.equal(s.ordinal,   915);
+});
+
+test('WlkSector.parse extracts the wldx compressed + tile pointers (@0xEC/@0xF0/@0xD4/@0xD8)', () => {
+    const {buf} = WlkSectorFixture.build(1500, 915, {
+        compOffset:  0x100,
+        compSize:    957,
+        tilesOffset: 0x20,
+        tilesSize:   131072
+    });
+    const s = WlkSector.parse(buf);
+
+    assert.equal(s.compressedOffset,    0x100);
+    assert.equal(s.compressedSize,      957);
+    assert.equal(s.tilesRelativeOffset, 0x20);
+    assert.equal(s.tilesSize,           131072);
 });
 
 test('WlkSector.parse honours byteOffset for parsing inline inside a larger buffer', () => {

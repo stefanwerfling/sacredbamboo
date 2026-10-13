@@ -31,9 +31,33 @@ export class WlkSector {
     public static readonly GRID_INDEX_OFFSET = 0x20;
     public static readonly ORDINAL_OFFSET    = 0x24;
 
+    /**
+     * Pointers into `sectors.wldx`, verified 2026-10-14 across all 6050
+     * sectors (see `scripts/verify_keyx_wldx_xref.ts`) — keyx IS the wldx
+     * offset table, so `WldReader` no longer has to walk the file.
+     *
+     *   compressedOffset   @+0xEC  absolute byte offset of this sector's zlib
+     *                              stream in sectors.wldx (sector 0 = 0x100).
+     *   compressedSize     @+0xF0  full zlib-frame length (2B header + deflate
+     *                              + 4B Adler-32).
+     *   tilesRelativeOffset@+0xD4  tile-table start within the *decompressed*
+     *                              body — constant 0x20 (right after the 32-byte
+     *                              name block).
+     *   tilesSize          @+0xD8  tile-table byte size — 131072 = 4096 cells
+     *                              × 32 B (the 64×64 outdoor grid).
+     */
+    public static readonly COMPRESSED_OFFSET_OFFSET = 0xEC;
+    public static readonly COMPRESSED_SIZE_OFFSET   = 0xF0;
+    public static readonly TILES_OFFSET_OFFSET      = 0xD4;
+    public static readonly TILES_SIZE_OFFSET        = 0xD8;
+
     public constructor(
-        public readonly gridIndex: number,
-        public readonly ordinal:   number
+        public readonly gridIndex:          number,
+        public readonly ordinal:            number,
+        public readonly compressedOffset:    number = 0,
+        public readonly compressedSize:      number = 0,
+        public readonly tilesRelativeOffset: number = 0,
+        public readonly tilesSize:           number = 0
     ) {}
 
     public static parse(buf: ArrayBuffer, byteOffset = 0): WlkSector {
@@ -46,8 +70,12 @@ export class WlkSector {
         const v = new DataView(buf, byteOffset, WlkSector.SIZE);
 
         return new WlkSector(
-            v.getUint32(WlkSector.GRID_INDEX_OFFSET, true),
-            v.getUint32(WlkSector.ORDINAL_OFFSET,    true)
+            v.getUint32(WlkSector.GRID_INDEX_OFFSET,        true),
+            v.getUint32(WlkSector.ORDINAL_OFFSET,           true),
+            v.getUint32(WlkSector.COMPRESSED_OFFSET_OFFSET, true),
+            v.getUint32(WlkSector.COMPRESSED_SIZE_OFFSET,   true),
+            v.getUint32(WlkSector.TILES_OFFSET_OFFSET,      true),
+            v.getUint32(WlkSector.TILES_SIZE_OFFSET,        true)
         );
     }
 

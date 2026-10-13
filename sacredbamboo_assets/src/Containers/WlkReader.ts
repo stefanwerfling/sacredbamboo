@@ -1,4 +1,5 @@
 import {IRandomAccess} from '../Util/IRandomAccess.js';
+import {WlkSector}     from '../Records/WlkSector.js';
 
 /**
  * "WLK\x05" container — `sectors.keyx`. Verified against the real 4.6 MB
@@ -140,6 +141,34 @@ export class WlkReader {
         const h = this.getHeader();
 
         return this._src.read(WlkHeader.SIZE, h.sectorCount * WlkReader.SECTOR_SIZE);
+    }
+
+    /**
+     * Build the `sectors.wldx` per-sector index straight from the keyx table.
+     * Returns an interleaved `Uint32Array` of `[offset0, length0, offset1, …]`,
+     * i.e. the exact shape `WldReader.open(index)` consumes.
+     *
+     * Verified 2026-10-14 (`scripts/verify_keyx_wldx_xref.ts`) to match, for all
+     * 6050 retail sectors, the index `WldReader` otherwise derives by walking
+     * every zlib stream — so passing this in lets `WldReader.open()` skip that
+     * ~3.5 s walk. `@+0xEC` = absolute compressed offset in wldx, `@+0xF0` =
+     * full zlib-frame length. Sectors are stored in keyx iteration order, the
+     * same order `WldReader` indexes by.
+     */
+    public async getWldxSectorIndex(): Promise<Uint32Array> {
+        const h     = this.getHeader();
+        const blob  = await this.readAllSectorsBlob();
+        const view  = new DataView(blob);
+        const index = new Uint32Array(h.sectorCount * 2);
+
+        for (let i = 0; i < h.sectorCount; i++) {
+            const base = i * WlkReader.SECTOR_SIZE;
+
+            index[i * 2]     = view.getUint32(base + WlkSector.COMPRESSED_OFFSET_OFFSET, true);
+            index[i * 2 + 1] = view.getUint32(base + WlkSector.COMPRESSED_SIZE_OFFSET,   true);
+        }
+
+        return index;
     }
 
 }

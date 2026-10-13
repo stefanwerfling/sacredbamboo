@@ -24,9 +24,12 @@ interface InflateInternal {
  *              the inflated-total nor the compressed-total. Decoding pending.
  *   @0x29..0xff  zeros
  *   @0x100..EOF  6050 concatenated zlib streams (RFC 1950, with the 0x78 0x9c
- *                magic), one per WLK-sector in iteration order. No offset
- *                table is stored — the reader walks the file once to build
- *                a per-sector index.
+ *                magic), one per WLK-sector in iteration order. The wldx file
+ *                itself carries no offset table, but `sectors.keyx` does:
+ *                each sector entry's @0xEC/@0xF0 give this stream's absolute
+ *                offset and full-frame length (verified identical to our walk
+ *                across all 6050 sectors, 2026-10-14). `open(index)` consumes
+ *                that; `open()` with no argument walks the file to rebuild it.
  *
  * Each stream inflates to a "Sector <col>,<row>\0" ASCII header (12 B name +
  * 0xCD MSVC heap-fill, 32 B block in total) followed by binary record data.
@@ -66,19 +69,20 @@ export class WldHeader {
 /**
  * Reader for `sectors.wldx`. Two-phase use:
  *
- *   1. `await open()` — reads the 256 B header, validates the signature, then
- *      walks every zlib stream from @0x100 to EOF to build a per-sector
- *      (compressedOffset, compressedLength) index. The walk inflates each
- *      stream once to discover its length; for the 60 MB retail file this
- *      takes ~1–3 s on a modern machine. We keep only the index (~48 KB),
- *      not the inflated bytes, so memory stays bounded.
+ *   1. `await open(index?)` — reads the 256 B header and validates the
+ *      signature. With an `index` (from `WlkReader.getWldxSectorIndex()`) it
+ *      adopts that (offset,length) table after bounds/contiguity validation —
+ *      no file walk. Without one it falls back to walking every zlib stream
+ *      from @0x100 to EOF to rebuild the index, inflating each stream once to
+ *      discover its length (~1–3 s on the 60 MB retail file). Either way we
+ *      keep only the index (~48 KB), not the inflated bytes.
  *   2. `await readSector(i)` — seeks via the index, reads exactly the right
  *      compressed range, inflates, returns the raw `Uint8Array`.
  *
- * The walker reads the whole file into memory (the IRandomAccess is asked
- * for a single `read(0, size)`); 60 MB is acceptable for the editor target.
- * If a much larger WLD is encountered later, this can be redone with a
- * chunked Inflate fed by sliding-window reads.
+ * The walk fallback reads the whole file into memory (the IRandomAccess is
+ * asked for a single `read(0, size)`); 60 MB is acceptable for the editor
+ * target. If a much larger WLD is encountered later, this can be redone with
+ * a chunked Inflate fed by sliding-window reads.
  */
 export class WldReader {
 
@@ -90,7 +94,20 @@ export class WldReader {
 
     public constructor(private readonly _src: IRandomAccess) {}
 
-    public async open(): Promise<void> {
+    /**
+     * Two entry points into the same reader:
+     *
+     *   - `open()` (no argument) walks every zlib stream once to derive the
+     *     per-sector (offset, length) index — the self-contained path, used
+     *     when only the wldx file is available (~3.5 s on the retail file).
+     *   - `open(precomputedIndex)` takes the index straight from the keyx
+     *     table (`WlkReader.getWldxSectorIndex()`) and skips the walk entirely.
+     *     Verified 2026-10-14 to be byte-for-byte identical to the walked
+     *     index for all 6050 retail sectors. The supplied index is validated
+     *     against this file (count, per-stream bounds, contiguity, exact EOF
+     *     fit); a mismatch throws so a stale/foreign keyx can't desync us.
+     */
+    public async open(precomputedIndex?: Uint32Array): Promise<void> {
         const fileSize  = this._src.size();
         const headerBuf = await this._src.read(0, WldHeader.SIZE);
         const header    = WldHeader.parse(headerBuf);
@@ -99,11 +116,19 @@ export class WldReader {
             throw new Error(`Not a sectors.wldx — signature was "${header.signature}", expected "WLD"`);
         }
 
+        this._header = header;
+        this._index  = precomputedIndex === undefined
+            ? await this._walkIndex(fileSize, header.sectorCount)
+            : this._validateIndex(precomputedIndex, fileSize, header.sectorCount);
+    }
+
+    /** Walk every concatenated zlib stream from @0x100 to EOF to derive the index. */
+    private async _walkIndex(fileSize: number, sectorCount: number): Promise<Uint32Array> {
         const all   = new Uint8Array(await this._src.read(0, fileSize));
-        const index = new Uint32Array(header.sectorCount * 2);
+        const index = new Uint32Array(sectorCount * 2);
         let cursor  = WldHeader.SIZE;
 
-        for (let i = 0; i < header.sectorCount; i++) {
+        for (let i = 0; i < sectorCount; i++) {
             const start = cursor;
 
             if (cursor + WldReader.ZLIB_FRAME_OVERHEAD > all.length) {
@@ -141,12 +166,46 @@ export class WldReader {
 
         if (cursor !== fileSize) {
             throw new Error(
-                `WLD walker: after ${header.sectorCount} streams cursor is at 0x${cursor.toString(16)} but file size is 0x${fileSize.toString(16)}`
+                `WLD walker: after ${sectorCount} streams cursor is at 0x${cursor.toString(16)} but file size is 0x${fileSize.toString(16)}`
             );
         }
 
-        this._header = header;
-        this._index  = index;
+        return index;
+    }
+
+    /**
+     * Accept a keyx-sourced `[offset, length, …]` index and make sure it
+     * actually describes THIS wldx file before trusting it: right element
+     * count, every stream in-bounds, streams contiguous from the 0x100 header
+     * with no gaps/overlaps, and the last one ending exactly at EOF.
+     */
+    private _validateIndex(index: Uint32Array, fileSize: number, sectorCount: number): Uint32Array {
+        if (index.length !== sectorCount * 2) {
+            throw new Error(`WLD index length ${index.length} does not match 2× sectorCount (${sectorCount})`);
+        }
+
+        let cursor = WldHeader.SIZE;
+
+        for (let i = 0; i < sectorCount; i++) {
+            const offset = index[i * 2]!;
+            const length = index[i * 2 + 1]!;
+
+            if (offset !== cursor) {
+                throw new Error(`WLD index: sector ${i} offset 0x${offset.toString(16)} is not contiguous (expected 0x${cursor.toString(16)})`);
+            }
+
+            if (length < WldReader.ZLIB_FRAME_OVERHEAD || offset + length > fileSize) {
+                throw new Error(`WLD index: sector ${i} range (0x${offset.toString(16)}, ${length}) is out of bounds for a ${fileSize}-byte file`);
+            }
+
+            cursor += length;
+        }
+
+        if (cursor !== fileSize) {
+            throw new Error(`WLD index: streams end at 0x${cursor.toString(16)} but file size is 0x${fileSize.toString(16)}`);
+        }
+
+        return index;
     }
 
     public getHeader(): WldHeader {

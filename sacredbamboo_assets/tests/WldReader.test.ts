@@ -167,6 +167,95 @@ test('WldReader.open errors when the file has trailing bytes past the last strea
     await assert.rejects(() => r.open(), /cursor is at|file size is/);
 });
 
+/** Build the (offset,length) index a fresh walk would produce — simulates WlkReader.getWldxSectorIndex(). */
+async function walkedIndex(buf: ArrayBuffer): Promise<Uint32Array> {
+    const r = new WldReader(new BufferRandomAccess(buf));
+
+    await r.open();
+
+    const n   = r.getSectorCount();
+    const idx = new Uint32Array(n * 2);
+
+    for (let i = 0; i < n; i++) {
+        const {offset, length} = r.getSectorRange(i);
+
+        idx[i * 2]     = offset;
+        idx[i * 2 + 1] = length;
+    }
+
+    return idx;
+}
+
+test('WldReader.open(index) adopts a keyx-sourced index and reads sectors without walking', async () => {
+    const payloads = [
+        WldFixture.sectorPayload(0, 15),
+        WldFixture.sectorPayload(0, 24, 100),
+        WldFixture.sectorPayload(1, 30, 4096)
+    ];
+    const buf   = WldFixture.build(payloads);
+    const index = await walkedIndex(buf);
+
+    const r = new WldReader(new BufferRandomAccess(buf));
+
+    await r.open(index);
+
+    assert.equal(r.getSectorCount(), payloads.length);
+
+    // Ranges match the walk...
+    for (let i = 0; i < payloads.length; i++) {
+        assert.equal(r.getSectorRange(i).offset, index[i * 2]);
+        assert.equal(r.getSectorRange(i).length, index[i * 2 + 1]);
+    }
+
+    // ...and the payloads still decompress correctly.
+    for (let i = 0; i < payloads.length; i++) {
+        const got = await r.readSector(i);
+
+        assert.deepEqual(Array.from(got), Array.from(payloads[i]!), `sector ${i} bytes`);
+    }
+});
+
+test('WldReader.open(index) rejects a wrong element count', async () => {
+    const buf = WldFixture.build([WldFixture.sectorPayload(0, 0)]);
+    const r   = new WldReader(new BufferRandomAccess(buf));
+
+    await assert.rejects(() => r.open(new Uint32Array([WldHeader.SIZE, 10, 0, 0])), /does not match 2× sectorCount/);
+});
+
+test('WldReader.open(index) rejects a non-contiguous offset', async () => {
+    const buf   = WldFixture.build([WldFixture.sectorPayload(0, 0), WldFixture.sectorPayload(0, 1, 64)]);
+    const index = await walkedIndex(buf);
+
+    index[2] += 1; // push sector 1's offset off its predecessor's end
+
+    const r = new WldReader(new BufferRandomAccess(buf));
+
+    await assert.rejects(() => r.open(index), /not contiguous/);
+});
+
+test('WldReader.open(index) rejects a range running past EOF', async () => {
+    const buf   = WldFixture.build([WldFixture.sectorPayload(0, 0)]);
+    const index = await walkedIndex(buf);
+
+    index[1] += 16; // last stream now claims to end past the file
+
+    const r = new WldReader(new BufferRandomAccess(buf));
+
+    await assert.rejects(() => r.open(index), /out of bounds|file size is/);
+});
+
+test('WldReader.open(index) rejects when streams do not fill the file', async () => {
+    const buf   = WldFixture.build([WldFixture.sectorPayload(0, 0), WldFixture.sectorPayload(0, 1, 64)]);
+    const index = await walkedIndex(buf);
+
+    // Shrink the last stream so the covered range stops short of EOF.
+    index[3] -= 4;
+
+    const r = new WldReader(new BufferRandomAccess(buf));
+
+    await assert.rejects(() => r.open(index), /file size is/);
+});
+
 test('WldSector.getName extracts the "Sector col,row" ASCII prefix', () => {
     const u8 = WldFixture.sectorPayload(3, 42);
     const s  = WldSector.parse(u8);

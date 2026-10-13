@@ -112,6 +112,8 @@ export class AppState {
     private _isoTiles: IsoTilesReader | null                 = null;
     private _tex:      TexReader | null                      = null;
     private _mixed:    MixedReader | null                    = null;
+    /** wldx (offset,length) index lifted from sectors.keyx, so WldReader skips its stream-walk. */
+    private _wldxIndex: Uint32Array | null                   = null;
     private readonly _texCache    = new Map<number, CanvasImageSource>(); // by tile index
     // Static-object sprites (mixed.pak assetId → decoded frame-0 sprite).
     private readonly _spriteCache = new Map<number, {img: CanvasImageSource; w: number; h: number} | null>();
@@ -137,6 +139,7 @@ export class AppState {
         this._isoTiles    = null;
         this._tex         = null;
         this._mixed       = null;
+        this._wldxIndex   = null;
         this._texCache.clear();
         this._spriteCache.clear();
 
@@ -323,7 +326,18 @@ export class AppState {
             const file   = await this.dir.getFile(relPath);
             const reader = new WldReader(new FileRandomAccess(file));
 
-            await reader.open();
+            // Prefer the keyx-sourced index (loaded just before us); fall back to
+            // WldReader's own stream-walk if keyx was missing or validation throws.
+            try {
+                await reader.open(this._wldxIndex ?? undefined);
+            } catch (err) {
+                if (this._wldxIndex) {
+                    console.warn(`${relPath}: keyx index rejected, falling back to stream-walk:`, err);
+                    await reader.open();
+                } else {
+                    throw err;
+                }
+            }
 
             this.containers.push({
                 kind:        'wld',
@@ -351,6 +365,11 @@ export class AppState {
             const gridIndex = new Uint32Array(h.sectorCount);
             const ordinal   = new Uint32Array(h.sectorCount);
             const blob      = await reader.readAllSectorsBlob();
+
+            // keyx carries the wldx compressed-stream (offset,length) table at
+            // @0xEC/@0xF0 — hand it to the following _loadWld so WldReader can
+            // skip its ~3.5 s stream-walk (verified identical, 2026-10-14).
+            this._wldxIndex = await reader.getWldxSectorIndex();
 
             for (let i = 0; i < h.sectorCount; i++) {
                 const s = WlkSector.parse(blob, i * WlkReader.SECTOR_SIZE);
