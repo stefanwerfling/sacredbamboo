@@ -11,18 +11,44 @@ class WlkSectorFixture {
         compSize?:    number;
         tilesOffset?: number;
         tilesSize?:   number;
+        serverRev?:   number;
+        neighbors?:   number[];
+        rawX?:        number;
+        rawY?:        number;
+        rawEndX?:     number;
+        rawEndY?:     number;
+        envFlags?:    number;
+        natureType?:  number;
+        liquidA?:     number;
+        liquidB?:     number;
     }): {buf: ArrayBuffer; byteOffset: number} {
         const sectorSize = opts?.size       ?? WlkSector.SIZE;
         const before     = opts?.byteOffset ?? 0;
         const buf        = new ArrayBuffer(before + sectorSize);
         const dv         = new DataView(buf);
 
-        dv.setUint32(before + WlkSector.GRID_INDEX_OFFSET,        gridIndex,             true);
-        dv.setUint32(before + WlkSector.ORDINAL_OFFSET,           ordinal,               true);
+        dv.setUint32(before + WlkSector.GRID_INDEX_OFFSET,        gridIndex,              true);
+        dv.setUint32(before + WlkSector.ORDINAL_OFFSET,           ordinal,                true);
         dv.setUint32(before + WlkSector.COMPRESSED_OFFSET_OFFSET, opts?.compOffset  ?? 0, true);
         dv.setUint32(before + WlkSector.COMPRESSED_SIZE_OFFSET,   opts?.compSize    ?? 0, true);
         dv.setUint32(before + WlkSector.TILES_OFFSET_OFFSET,      opts?.tilesOffset ?? 0, true);
         dv.setUint32(before + WlkSector.TILES_SIZE_OFFSET,        opts?.tilesSize   ?? 0, true);
+        dv.setUint32(before + WlkSector.SERVER_REVISION_OFFSET,   opts?.serverRev   ?? 0, true);
+
+        const nb = opts?.neighbors ?? [];
+
+        for (let i = 0; i < WlkSector.NEIGHBOR_COUNT; i++) {
+            dv.setUint16(before + WlkSector.NEIGHBORS_OFFSET + i * 2, nb[i] ?? 0, true);
+        }
+
+        dv.setInt32(before + WlkSector.RAW_X_OFFSET,     opts?.rawX     ?? 0, true);
+        dv.setInt32(before + WlkSector.RAW_Y_OFFSET,     opts?.rawY     ?? 0, true);
+        dv.setInt32(before + WlkSector.RAW_END_X_OFFSET, opts?.rawEndX  ?? 0, true);
+        dv.setInt32(before + WlkSector.RAW_END_Y_OFFSET, opts?.rawEndY  ?? 0, true);
+        dv.setUint32(before + WlkSector.ENV_FLAGS_OFFSET, opts?.envFlags ?? 0, true);
+        dv.setUint8(before + WlkSector.NATURE_TYPE_OFFSET, opts?.natureType ?? 0);
+        dv.setUint8(before + WlkSector.LIQUID_A_OFFSET,    opts?.liquidA    ?? 0);
+        dv.setUint8(before + WlkSector.LIQUID_B_OFFSET,    opts?.liquidB    ?? 0);
 
         return {buf, byteOffset: before};
     }
@@ -50,6 +76,42 @@ test('WlkSector.parse extracts the wldx compressed + tile pointers (@0xEC/@0xF0/
     assert.equal(s.compressedSize,      957);
     assert.equal(s.tilesRelativeOffset, 0x20);
     assert.equal(s.tilesSize,           131072);
+});
+
+test('WlkSector.parse extracts neighbors, raw world bounds and env/nature/liquid', () => {
+    const {buf} = WlkSectorFixture.build(2701, 1661, {
+        serverRev:  7,
+        neighbors:  [0, 0, 1591, 1662, 1732, 0, 1731, 0],
+        rawX:       3434,
+        rawY:       92734,
+        rawEndX:    6869,
+        rawEndY:    96168,
+        envFlags:   0xd0,
+        natureType: 64,
+        liquidA:    1,
+        liquidB:    2
+    });
+    const s = WlkSector.parse(buf);
+
+    assert.equal(s.serverRevisionId, 7);
+    assert.deepEqual(Array.from(s.neighbors), [0, 0, 1591, 1662, 1732, 0, 1731, 0]);
+    assert.deepEqual(s.neighborOrdinals(), [1591, 1662, 1732, 1731]);
+    assert.equal(s.rawX,    3434);
+    assert.equal(s.rawY,    92734);
+    assert.equal(s.rawEndX, 6869);
+    assert.equal(s.rawEndY, 96168);
+    assert.equal(s.environmentFlags, 0xd0);
+    assert.equal(s.natureType,       64);
+    assert.equal(s.liquidStyleA,     1);
+    assert.equal(s.liquidStyleB,     2);
+});
+
+test('WlkSector.parse reads signed negative raw coordinates', () => {
+    const {buf} = WlkSectorFixture.build(0, 1, {rawX: -18432, rawY: -5});
+    const s     = WlkSector.parse(buf);
+
+    assert.equal(s.rawX, -18432);
+    assert.equal(s.rawY, -5);
 });
 
 test('WlkSector.parse honours byteOffset for parsing inline inside a larger buffer', () => {

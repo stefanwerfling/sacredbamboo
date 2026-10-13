@@ -83,10 +83,16 @@ export class Inspector {
         const row = s.row(c.gridWidth);
         const col = s.col(c.gridWidth);
 
+        const hex = (n: number): string => `0x${(n >>> 0).toString(16)}`;
+
         return [
             'WlkSector',
             `  gridIndex:  ${s.gridIndex}   →   (row=${row}, col=${col}) in ${c.gridWidth}×${c.gridHeight} grid`,
-            `  ordinal:    ${s.ordinal}   (1..${c.sectorCount} permutation; alternate sector id)`,
+            `  ordinal:    ${s.ordinal}   (1..${c.sectorCount} sector id; neighbors reference this)`,
+            `  neighbors:  [${s.neighborOrdinals().join(', ') || '—'}]   (adjacent sector ids)`,
+            `  world:      origin (${s.rawX}, ${s.rawY}) → (${s.rawEndX}, ${s.rawEndY})`,
+            `  wldx:       offset ${hex(s.compressedOffset)}  size ${s.compressedSize}   · tiles +${hex(s.tilesRelativeOffset)}/${s.tilesSize}B`,
+            `  env:        flags ${hex(s.environmentFlags)}  nature ${hex(s.natureType)}  liquid ${s.liquidStyleA}/${s.liquidStyleB}  rev ${s.serverRevisionId}`,
             ''
         ].join('\n');
     }

@@ -12,19 +12,38 @@
  *                                column-major (col ASC, then row ASC) and
  *                                only ~60.5% of grid cells are populated.
  *   uint32 ordinal     @+0x24   1-based ordinal in `1..sectorCount`. Exact
- *                                permutation of that range. Not the same
- *                                as the iteration index — sector 0 has
- *                                ordinal 915. Probably a key into another
- *                                file (WLD?) or an alternate ordering.
+ *                                permutation of that range. Not the iteration
+ *                                index — sector 0 has ordinal 915. CONFIRMED
+ *                                2026-10-14 as the sector's world-archive id:
+ *                                `neighbors` reference other sectors by this
+ *                                value (all adjacent), so it is the sector
+ *                                adjacency/linking key.
  *
  * The original hypothesis that these were first-record-indices into
- * Floor.PAK / Static.PAK was falsified by the same script (max values 9999
- * and 6050 are far too small for Floor's 6.7 M records or Static's 1 M).
+ * Floor.PAK / Static.PAK was falsified (max values 9999 and 6050 are far too
+ * small for Floor's 6.7 M records or Static's 1 M).
  *
  * `gridWidth` is needed to split `gridIndex` into (row, col); we keep it
  * out of the parsed object so this class stays a pure bytes-to-fields view
  * matching `FloorRecord.parse(buf)`. Callers obtain it from `WlkHeader`.
  */
+export interface WlkSectorFields {
+    compressedOffset:    number;
+    compressedSize:      number;
+    tilesRelativeOffset: number;
+    tilesSize:           number;
+    serverRevisionId:    number;
+    neighbors:           readonly number[];
+    rawX:                number;
+    rawY:                number;
+    rawEndX:             number;
+    rawEndY:             number;
+    environmentFlags:    number;
+    natureType:          number;
+    liquidStyleA:        number;
+    liquidStyleB:        number;
+}
+
 export class WlkSector {
 
     public static readonly SIZE              = 0x300;
@@ -51,14 +70,76 @@ export class WlkSector {
     public static readonly TILES_OFFSET_OFFSET      = 0xD4;
     public static readonly TILES_SIZE_OFFSET        = 0xD8;
 
+    /**
+     * Fields decoded + verified 2026-10-14 over all 6050 retail sectors
+     * (`scripts/inspect_keyx_fields.ts`), offsets hinted by [[reference-
+     * sacredengineremake]]'s `KeyxSectorRecord` and confirmed empirically here:
+     *
+     *   neighbors  @+0x2C  uint16[8] — adjacent sector `ordinal`s (the @0x24 id
+     *                      space), 0 = no neighbor. VERIFIED: all 39 618 non-zero
+     *                      refs are valid ids AND spatially adjacent (|Δrow|≤1,
+     *                      |Δcol|≤1). Slot order (compass direction) not pinned.
+     *   rawX/rawY  @+0x3C/0x40  int32 world-space origin of the sector =
+     *                      col/row × 3434.596 (6050/6050 fit within ±2).
+     *   rawEndX/Y  @+0x44/0x48  int32 opposite corner = raw + 3434 (sector extent).
+     *
+     * Present but semantics only partially understood — exposed as raw values,
+     * no bit/enum meaning claimed:
+     *   serverRevisionId @+0x28 (u32; 0 across retail)
+     *   environmentFlags @+0x1CC (u32 bitfield; 23 distinct values)
+     *   natureType       @+0x1D8 (u8 enum; 12 distinct, high-nibble values)
+     *   liquidStyleA/B   @+0x2E0/0x2E1 (u8; mostly 0)
+     */
+    public static readonly SERVER_REVISION_OFFSET = 0x28;
+    public static readonly NEIGHBORS_OFFSET       = 0x2C;
+    public static readonly NEIGHBOR_COUNT         = 8;
+    public static readonly RAW_X_OFFSET           = 0x3C;
+    public static readonly RAW_Y_OFFSET           = 0x40;
+    public static readonly RAW_END_X_OFFSET       = 0x44;
+    public static readonly RAW_END_Y_OFFSET       = 0x48;
+    public static readonly ENV_FLAGS_OFFSET       = 0x1CC;
+    public static readonly NATURE_TYPE_OFFSET     = 0x1D8;
+    public static readonly LIQUID_A_OFFSET        = 0x2E0;
+    public static readonly LIQUID_B_OFFSET        = 0x2E1;
+
+    /** Approximate world units per grid step, derived from the authored RawX/RawY (340025 / 99). */
+    public static readonly WORLD_STRIDE = 340025 / 99;
+
+    public readonly compressedOffset:    number;
+    public readonly compressedSize:      number;
+    public readonly tilesRelativeOffset: number;
+    public readonly tilesSize:           number;
+    public readonly serverRevisionId:    number;
+    public readonly neighbors:           readonly number[];
+    public readonly rawX:                number;
+    public readonly rawY:                number;
+    public readonly rawEndX:             number;
+    public readonly rawEndY:             number;
+    public readonly environmentFlags:    number;
+    public readonly natureType:          number;
+    public readonly liquidStyleA:        number;
+    public readonly liquidStyleB:        number;
+
     public constructor(
-        public readonly gridIndex:          number,
-        public readonly ordinal:            number,
-        public readonly compressedOffset:    number = 0,
-        public readonly compressedSize:      number = 0,
-        public readonly tilesRelativeOffset: number = 0,
-        public readonly tilesSize:           number = 0
-    ) {}
+        public readonly gridIndex: number,
+        public readonly ordinal:   number,
+        fields?: Partial<WlkSectorFields>
+    ) {
+        this.compressedOffset    = fields?.compressedOffset    ?? 0;
+        this.compressedSize      = fields?.compressedSize      ?? 0;
+        this.tilesRelativeOffset = fields?.tilesRelativeOffset ?? 0;
+        this.tilesSize           = fields?.tilesSize           ?? 0;
+        this.serverRevisionId    = fields?.serverRevisionId    ?? 0;
+        this.neighbors           = fields?.neighbors           ?? [];
+        this.rawX                = fields?.rawX                ?? 0;
+        this.rawY                = fields?.rawY                ?? 0;
+        this.rawEndX             = fields?.rawEndX             ?? 0;
+        this.rawEndY             = fields?.rawEndY             ?? 0;
+        this.environmentFlags    = fields?.environmentFlags    ?? 0;
+        this.natureType          = fields?.natureType          ?? 0;
+        this.liquidStyleA        = fields?.liquidStyleA        ?? 0;
+        this.liquidStyleB        = fields?.liquidStyleB        ?? 0;
+    }
 
     public static parse(buf: ArrayBuffer, byteOffset = 0): WlkSector {
         if (buf.byteLength - byteOffset < WlkSector.SIZE) {
@@ -67,16 +148,38 @@ export class WlkSector {
             );
         }
 
-        const v = new DataView(buf, byteOffset, WlkSector.SIZE);
+        const v         = new DataView(buf, byteOffset, WlkSector.SIZE);
+        const neighbors = new Array<number>(WlkSector.NEIGHBOR_COUNT);
+
+        for (let i = 0; i < WlkSector.NEIGHBOR_COUNT; i++) {
+            neighbors[i] = v.getUint16(WlkSector.NEIGHBORS_OFFSET + i * 2, true);
+        }
 
         return new WlkSector(
-            v.getUint32(WlkSector.GRID_INDEX_OFFSET,        true),
-            v.getUint32(WlkSector.ORDINAL_OFFSET,           true),
-            v.getUint32(WlkSector.COMPRESSED_OFFSET_OFFSET, true),
-            v.getUint32(WlkSector.COMPRESSED_SIZE_OFFSET,   true),
-            v.getUint32(WlkSector.TILES_OFFSET_OFFSET,      true),
-            v.getUint32(WlkSector.TILES_SIZE_OFFSET,        true)
+            v.getUint32(WlkSector.GRID_INDEX_OFFSET, true),
+            v.getUint32(WlkSector.ORDINAL_OFFSET,    true),
+            {
+                compressedOffset:    v.getUint32(WlkSector.COMPRESSED_OFFSET_OFFSET, true),
+                compressedSize:      v.getUint32(WlkSector.COMPRESSED_SIZE_OFFSET,   true),
+                tilesRelativeOffset: v.getUint32(WlkSector.TILES_OFFSET_OFFSET,      true),
+                tilesSize:           v.getUint32(WlkSector.TILES_SIZE_OFFSET,        true),
+                serverRevisionId:    v.getUint32(WlkSector.SERVER_REVISION_OFFSET,  true),
+                neighbors,
+                rawX:                v.getInt32(WlkSector.RAW_X_OFFSET,     true),
+                rawY:                v.getInt32(WlkSector.RAW_Y_OFFSET,     true),
+                rawEndX:             v.getInt32(WlkSector.RAW_END_X_OFFSET, true),
+                rawEndY:             v.getInt32(WlkSector.RAW_END_Y_OFFSET, true),
+                environmentFlags:    v.getUint32(WlkSector.ENV_FLAGS_OFFSET, true),
+                natureType:          v.getUint8(WlkSector.NATURE_TYPE_OFFSET),
+                liquidStyleA:        v.getUint8(WlkSector.LIQUID_A_OFFSET),
+                liquidStyleB:        v.getUint8(WlkSector.LIQUID_B_OFFSET)
+            }
         );
+    }
+
+    /** Non-zero neighbor ordinals only (drops the 0 = "no neighbor" slots). */
+    public neighborOrdinals(): number[] {
+        return this.neighbors.filter((n) => n !== 0);
     }
 
     /** Decompose `gridIndex` into (row, col) using the WLK header's gridWidth. */

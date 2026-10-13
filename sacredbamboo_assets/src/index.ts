@@ -33,6 +33,7 @@ export {MixedReader} from './Containers/MixedReader.js';
 export {FloorRecord}  from './Records/FloorRecord.js';
 export {StaticRecord} from './Records/StaticRecord.js';
 export {WlkSector}   from './Records/WlkSector.js';
+export type {WlkSectorFields} from './Records/WlkSector.js';
 export {WldSector}   from './Records/WldSector.js';
 export {WldCell}     from './Records/WldCell.js';
 export {IsoTile}     from './Records/IsoTile.js';
