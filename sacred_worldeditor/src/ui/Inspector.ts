@@ -64,8 +64,9 @@ export class Inspector {
         const body    = sec.getBody();
         const tail    = sec.getTail();
 
-        // Navigation + terrain summary from every cell.
+        // Navigation + terrain + world-flag summary from every cell.
         let blockers = 0, stairs = 0, portals = 0, liquid = 0, raised = 0, shaded = 0;
+        let indoor = 0, town = 0, triggers = 0;
 
         for (let i = 0; i < sec.cellCount(); i++) {
             const cell = sec.getCell(i);
@@ -76,6 +77,9 @@ export class Inspector {
             if (cell.isLiquidSurface())   {liquid++;}
             if (cell.hasElevation())      {raised++;}
             if (!cell.isFullyBright())    {shaded++;}
+            if (cell.isIndoor())          {indoor++;}
+            if (cell.isTown())            {town++;}
+            if (cell.hasTrigger())        {triggers++;}
         }
 
         const lines   = [
@@ -87,6 +91,7 @@ export class Inspector {
             `  ratio:        ${(sec.getSize() / range.length).toFixed(1)}×`,
             `  navigation:   ${blockers} blockers · ${stairs} stairs · ${portals} indoor portals · ${liquid} liquid  (of ${sec.cellCount()} cells)`,
             `  terrain:      ${raised} raised · ${shaded} shaded  (corner elevation / baked brightness)`,
+            `  world flags:  ${indoor} indoor · ${town} town · ${triggers} trigger`,
             '',
             'Body (first 256B after 32B name block):',
             Inspector._hexDump(body.subarray(0, Math.min(256, body.byteLength)), 256)

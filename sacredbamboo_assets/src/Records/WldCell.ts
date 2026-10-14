@@ -44,8 +44,16 @@
  *                                      row+1 neighbor's N corners (NW,NE) 100%.
  *   @0x1C  sbyte indoorAnchorDeltaX    signed X delta to the parent indoor anchor tile.
  *   @0x1D  sbyte indoorAnchorDeltaY    signed Y delta to the parent indoor anchor tile.
- *   @0x1E  byte  pathFlags             authored per-tile world flags (indoor/town/
- *                                      trigger/runtime-block) — exposed raw.
+ *                                      VERIFIED linked to Indoor: an anchor delta is
+ *                                      set iff the tile is Indoor (anchor⇒Indoor 0
+ *                                      exceptions; Indoor⇒anchor 98.9%, the rest are
+ *                                      their own anchor at delta 0,0).
+ *   @0x1E  byte  pathFlags             authored per-tile world flags. VERIFIED 2026-10-14
+ *                                      over ~5M cells: only 0x01 Indoor (0.40%),
+ *                                      0x02 Town (0.58%), 0x04 Trigger (0.01%) ever
+ *                                      appear; 0x08 RuntimeBlocked / 0x10 FootprintAnim
+ *                                      are runtime-only (0 in authored data), 0x20/40/80
+ *                                      never set. See isIndoor()/isTown()/hasTrigger().
  *   @0x1F  byte  properties            nibble-packed tile selector (behavior+surface).
  *
  * `@0x1F` nibble layout — verified over 1.65M retail cells (`verify_tile_byte.ts`):
@@ -79,6 +87,13 @@ export class WldCell {
     public static readonly STATIC_INDEX_MASK = 0xfffff;
     /** Fully-unoccluded baked-brightness value at a corner. */
     public static readonly BRIGHTNESS_MAX = 0xff;
+
+    /** `pathFlags` (@0x1E) bits. 0x08/0x10 are runtime-only; 0x20/0x40/0x80 unseen in authored data. */
+    public static readonly PATH_INDOOR         = 0x01;
+    public static readonly PATH_TOWN           = 0x02;
+    public static readonly PATH_TRIGGER        = 0x04;
+    public static readonly PATH_RUNTIME_BLOCK  = 0x08;
+    public static readonly PATH_FOOTPRINT_ANIM = 0x10;
 
     public readonly worldObjectChainHead: number;
     public readonly visualElevation:      readonly number[];
@@ -233,6 +248,21 @@ export class WldCell {
     /** True when the tile has any non-zero terrain elevation at a corner (sloped/raised). */
     public hasElevation(): boolean {
         return this.elevation.some((e) => e !== 0);
+    }
+
+    /** pathFlags @0x1E: tile belongs to an authored indoor area. */
+    public isIndoor(): boolean {
+        return (this.pathFlags & WldCell.PATH_INDOOR) !== 0;
+    }
+
+    /** pathFlags @0x1E: tile belongs to an authored town area. */
+    public isTown(): boolean {
+        return (this.pathFlags & WldCell.PATH_TOWN) !== 0;
+    }
+
+    /** pathFlags @0x1E: tile carries a trigger. */
+    public hasTrigger(): boolean {
+        return (this.pathFlags & WldCell.PATH_TRIGGER) !== 0;
     }
 
 }

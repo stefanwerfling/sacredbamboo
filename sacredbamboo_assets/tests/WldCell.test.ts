@@ -127,6 +127,27 @@ test('WldCell corner helpers: fully-bright and has-elevation', () => {
     assert.equal(sloped.hasElevation(),  true);
 });
 
+test('WldCell pathFlags: indoor / town / trigger bits', () => {
+    const none = WldCell.parse(WldCellFixture.build({pathFlags: 0x00}).buf);
+
+    assert.equal(none.isIndoor(),   false);
+    assert.equal(none.isTown(),     false);
+    assert.equal(none.hasTrigger(), false);
+
+    // 0x03 = Indoor | Town
+    const it = WldCell.parse(WldCellFixture.build({pathFlags: 0x03}).buf);
+
+    assert.equal(it.isIndoor(),   true);
+    assert.equal(it.isTown(),     true);
+    assert.equal(it.hasTrigger(), false);
+
+    // 0x04 = Trigger only
+    const tr = WldCell.parse(WldCellFixture.build({pathFlags: 0x04}).buf);
+
+    assert.equal(tr.isIndoor(),   false);
+    assert.equal(tr.hasTrigger(), true);
+});
+
 test('WldCell helpers: static presence and flags byte', () => {
     const {buf} = WldCellFixture.build({staticIndexA: 5, staticIndexB: 0, properties: 0x40});
     const c     = WldCell.parse(buf);
