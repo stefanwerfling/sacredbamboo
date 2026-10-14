@@ -36,7 +36,7 @@ export {WlkSector}   from './Records/WlkSector.js';
 export type {WlkSectorFields, WlkNeighborDirection} from './Records/WlkSector.js';
 export {WldSector}   from './Records/WldSector.js';
 export {WldCell}     from './Records/WldCell.js';
-export type {WldCellBehavior} from './Records/WldCell.js';
+export type {WldCellBehavior, WldCellFields} from './Records/WldCell.js';
 export {IsoTile}     from './Records/IsoTile.js';
 export {TexImage}    from './Records/TexImage.js';
 export {MixDef}      from './Records/MixDef.js';

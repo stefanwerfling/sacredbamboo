@@ -64,8 +64,8 @@ export class Inspector {
         const body    = sec.getBody();
         const tail    = sec.getTail();
 
-        // Navigation summary from the @0x1F tile byte of every cell.
-        let blockers = 0, stairs = 0, portals = 0, liquid = 0;
+        // Navigation + terrain summary from every cell.
+        let blockers = 0, stairs = 0, portals = 0, liquid = 0, raised = 0, shaded = 0;
 
         for (let i = 0; i < sec.cellCount(); i++) {
             const cell = sec.getCell(i);
@@ -74,6 +74,8 @@ export class Inspector {
             if (cell.isStairs())          {stairs++;}
             if (cell.isIndoorPortal())    {portals++;}
             if (cell.isLiquidSurface())   {liquid++;}
+            if (cell.hasElevation())      {raised++;}
+            if (!cell.isFullyBright())    {shaded++;}
         }
 
         const lines   = [
@@ -84,6 +86,7 @@ export class Inspector {
             `  compressed:   ${range.length.toLocaleString('de-DE')} bytes @ 0x${range.offset.toString(16)}`,
             `  ratio:        ${(sec.getSize() / range.length).toFixed(1)}×`,
             `  navigation:   ${blockers} blockers · ${stairs} stairs · ${portals} indoor portals · ${liquid} liquid  (of ${sec.cellCount()} cells)`,
+            `  terrain:      ${raised} raised · ${shaded} shaded  (corner elevation / baked brightness)`,
             '',
             'Body (first 256B after 32B name block):',
             Inspector._hexDump(body.subarray(0, Math.min(256, body.byteLength)), 256)

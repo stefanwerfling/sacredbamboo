@@ -6,57 +6,78 @@ class WldCellFixture {
 
     /** Build a 32-byte cell, optionally embedded at `byteOffset` in a larger buffer. */
     public static build(fields: Partial<{
-        floorIndex:   number;
-        staticIndexA: number;
-        reserved08:   number;
-        staticIndexB: number;
-        unknown10:    number;
-        extSentinel:  number;
-        corners:      number;
-        flags:        number;
+        floorIndex:           number;
+        staticIndexA:         number;
+        staticIndexB:         number;
+        worldObjectChainHead: number;
+        visualElevation:      number[];  // L,T,R,B  @0x10..0x13
+        bakedBrightness:      number[];  // SW,NW,NE,SE  @0x14..0x17
+        elevation:            number[];  // SW,NW,NE,SE  @0x18..0x1B
+        indoorAnchorDeltaX:   number;    // @0x1C
+        indoorAnchorDeltaY:   number;    // @0x1D
+        pathFlags:            number;    // @0x1E
+        properties:           number;    // @0x1F
     }>, byteOffset = 0): {buf: ArrayBuffer; byteOffset: number} {
         const buf = new ArrayBuffer(byteOffset + WldCell.SIZE);
         const dv  = new DataView(buf);
 
-        dv.setUint32(byteOffset + 0x00, fields.floorIndex   ?? 0, true);
-        dv.setUint32(byteOffset + 0x04, fields.staticIndexA ?? 0, true);
-        dv.setUint32(byteOffset + 0x08, fields.reserved08   ?? 0, true);
-        dv.setUint32(byteOffset + 0x0c, fields.staticIndexB ?? 0, true);
-        dv.setUint32(byteOffset + 0x10, fields.unknown10    ?? 0, true);
-        dv.setUint32(byteOffset + 0x14, fields.extSentinel  ?? 0, true);
-        dv.setUint32(byteOffset + 0x18, fields.corners      ?? 0, true);
-        dv.setUint32(byteOffset + 0x1c, fields.flags        ?? 0, true);
+        dv.setUint32(byteOffset + 0x00, fields.floorIndex           ?? 0, true);
+        dv.setUint32(byteOffset + 0x04, fields.staticIndexA         ?? 0, true);
+        dv.setUint32(byteOffset + 0x08, fields.worldObjectChainHead ?? 0, true);
+        dv.setUint32(byteOffset + 0x0c, fields.staticIndexB         ?? 0, true);
+
+        const quad = (base: number, vals: number[] | undefined, signed: boolean): void => {
+            for (let i = 0; i < 4; i++) {
+                const v = vals?.[i] ?? 0;
+
+                if (signed) {dv.setInt8(byteOffset + base + i, v);} else {dv.setUint8(byteOffset + base + i, v);}
+            }
+        };
+
+        quad(0x10, fields.visualElevation, true);
+        quad(0x14, fields.bakedBrightness, false);
+        quad(0x18, fields.elevation,       true);
+        dv.setInt8(byteOffset + 0x1c, fields.indoorAnchorDeltaX ?? 0);
+        dv.setInt8(byteOffset + 0x1d, fields.indoorAnchorDeltaY ?? 0);
+        dv.setUint8(byteOffset + 0x1e, fields.pathFlags  ?? 0);
+        dv.setUint8(byteOffset + 0x1f, fields.properties ?? 0);
 
         return {buf, byteOffset};
     }
 
 }
 
-test('WldCell.parse reads all eight u32 lanes from the documented offsets', () => {
+test('WldCell.parse reads the four chain heads and per-corner fields', () => {
     const {buf} = WldCellFixture.build({
-        floorIndex:   89173,
-        staticIndexA: 100,
-        staticIndexB: 3074,
-        unknown10:    12,
-        extSentinel:  0,
-        corners:      0x01010101,
-        flags:        0xd1000000
+        floorIndex:           89173,
+        staticIndexA:         100,
+        staticIndexB:         3074,
+        worldObjectChainHead: 0,
+        visualElevation:      [-1, 0, 2, 3],
+        bakedBrightness:      [0xff, 0xeb, 0xff, 0xd7],
+        elevation:            [0, 1, -2, 5],
+        indoorAnchorDeltaX:   -4,
+        indoorAnchorDeltaY:   6,
+        pathFlags:            0x12,
+        properties:           0xd1
     });
     const c = WldCell.parse(buf);
 
-    assert.equal(c.floorIndex,   89173);
-    assert.equal(c.staticIndexA, 100);
-    assert.equal(c.reserved08,   0);
-    assert.equal(c.staticIndexB, 3074);
-    assert.equal(c.unknown10,    12);
-    assert.equal(c.extSentinel,  0);
-    assert.equal(c.corners,      0x01010101);
-    assert.equal(c.flags >>> 0,  0xd1000000);
+    assert.equal(c.floorIndex,           89173);
+    assert.equal(c.staticIndexA,         100);
+    assert.equal(c.staticIndexB,         3074);
+    assert.equal(c.worldObjectChainHead, 0);
+    assert.deepEqual(c.visualElevation,  [-1, 0, 2, 3]);
+    assert.deepEqual(c.bakedBrightness,  [0xff, 0xeb, 0xff, 0xd7]);
+    assert.deepEqual(c.elevation,        [0, 1, -2, 5]);
+    assert.equal(c.indoorAnchorDeltaX,   -4);
+    assert.equal(c.indoorAnchorDeltaY,   6);
+    assert.equal(c.pathFlags,            0x12);
+    assert.equal(c.properties,           0xd1);
 });
 
 test('WldCell @0x1F splits into behavior (low nibble) and terrain surface (high nibble)', () => {
-    // flags byte 0xd1 → behavior 0x1 (BlockerA), surface 0xd0
-    const a = WldCell.parse(WldCellFixture.build({flags: 0xd1000000}).buf);
+    const a = WldCell.parse(WldCellFixture.build({properties: 0xd1}).buf);
 
     assert.equal(a.getFlagsByte(),   0xd1);
     assert.equal(a.behavior(),       0x1);
@@ -68,41 +89,51 @@ test('WldCell @0x1F splits into behavior (low nibble) and terrain surface (high 
     assert.equal(a.isLiquidSurface(),   false);
 
     // 0x9a → behavior 0xA (IndoorExit), surface 0x90 (liquid A)
-    const b = WldCell.parse(WldCellFixture.build({flags: 0x9a000000}).buf);
+    const b = WldCell.parse(WldCellFixture.build({properties: 0x9a}).buf);
 
     assert.equal(b.behaviorName(),    'IndoorExit');
     assert.equal(b.isIndoorPortal(),  true);
     assert.equal(b.terrainSurface(),  0x90);
     assert.equal(b.isLiquidSurface(), true);
 
-    // 0x07 → StairsUp2, surface 0x00
-    const c = WldCell.parse(WldCellFixture.build({flags: 0x07000000}).buf);
+    // 0x07 → StairsUp2
+    const c = WldCell.parse(WldCellFixture.build({properties: 0x07}).buf);
 
     assert.equal(c.behaviorName(), 'StairsUp2');
     assert.equal(c.isStairs(),     true);
 
     // 0x3b → behavior 0xB is not a documented value → Unknown
-    const d = WldCell.parse(WldCellFixture.build({flags: 0x3b000000}).buf);
+    const d = WldCell.parse(WldCellFixture.build({properties: 0x3b}).buf);
 
-    assert.equal(d.behaviorName(), 'Unknown');
+    assert.equal(d.behaviorName(),   'Unknown');
     assert.equal(d.terrainSurface(), 0x30);
 });
 
-test('WldCell helpers: static presence, corners, flags byte, sentinel', () => {
-    const {buf} = WldCellFixture.build({
-        staticIndexA: 5,
-        staticIndexB: 0,
-        corners:      0x04030201,
-        flags:        0x40000000,
-        extSentinel:  WldCell.EMPTY_SENTINEL
-    });
-    const c = WldCell.parse(buf);
+test('WldCell corner helpers: fully-bright and has-elevation', () => {
+    const flat = WldCell.parse(WldCellFixture.build({
+        bakedBrightness: [0xff, 0xff, 0xff, 0xff],
+        elevation:       [0, 0, 0, 0]
+    }).buf);
+
+    assert.equal(flat.isFullyBright(), true);
+    assert.equal(flat.hasElevation(),  false);
+
+    const sloped = WldCell.parse(WldCellFixture.build({
+        bakedBrightness: [0xff, 0xeb, 0xff, 0xff],
+        elevation:       [0, 0, -2, 0]
+    }).buf);
+
+    assert.equal(sloped.isFullyBright(), false);
+    assert.equal(sloped.hasElevation(),  true);
+});
+
+test('WldCell helpers: static presence and flags byte', () => {
+    const {buf} = WldCellFixture.build({staticIndexA: 5, staticIndexB: 0, properties: 0x40});
+    const c     = WldCell.parse(buf);
 
     assert.equal(c.hasStaticA(), true);
     assert.equal(c.hasStaticB(), false);
-    assert.deepEqual(c.getCorners(), [0x01, 0x02, 0x03, 0x04]);
     assert.equal(c.getFlagsByte(), 0x40);
-    assert.equal(c.isEmptySentinel(), true);
 });
 
 test('WldCell.staticA/B split the low-20-bit index from the flag bits', () => {
@@ -141,11 +172,14 @@ test('regression: the real sectors.wldx sector-0 cell decodes as expected', () =
     ]);
     const c = WldCell.parse(bytes);
 
-    assert.equal(c.floorIndex, 6782);           // 0x1a7e — matches Floor[6782].selfIndex
+    assert.equal(c.floorIndex, 6782);        // 0x1a7e — matches Floor[6782].selfIndex
     assert.equal(c.hasStaticA(), false);
     assert.equal(c.hasStaticB(), false);
-    assert.equal(c.isEmptySentinel(), true);    // 0xFFFFFFFF at @0x14
-    assert.equal(c.getFlagsByte(), 0xc0);       // high byte of @0x1c
+    assert.deepEqual(c.bakedBrightness, [0xff, 0xff, 0xff, 0xff]);
+    assert.equal(c.isFullyBright(), true);   // @0x14..0x17 all 0xFF (the old "sentinel")
+    assert.deepEqual(c.elevation, [0, 0, 0, 0]);
+    assert.equal(c.getFlagsByte(), 0xc0);    // @0x1F; behavior None, surface 0xC0
+    assert.equal(c.behaviorName(), 'None');
 });
 
 test('WldSector.getCell / getCellAt index into the 64×64 grid', () => {
