@@ -11,17 +11,26 @@
  * offsets hinted by [[reference-sacredengineremake]]'s WldxTileRecord and
  * confirmed empirically here):
  *
- *   @0x00  u32   floorIndex            Floor.PAK record index — VERIFIED matches
- *                                      Floor[i].selfIndex for every cell. Head of
- *                                      the floor-tile chain (FloorRecord.nextIndex).
+ *   @0x00  u32   floorIndex            Floor.PAK record index (0 = none) — VERIFIED
+ *                                      matches Floor[i].selfIndex. Head of the
+ *                                      floor-tile chain (FloorRecord.nextIndex).
+ *                                      Observed range 1..~90k (the ground-tile band).
  *   @0x04  u32   staticIndexA          Static.PAK reference: low 20 bits = record
- *                                      index (0 = none), upper bits = flags.
+ *                                      index (0 = none). Upper flag bits observed 0
+ *                                      across all sampled cells (raw max 1,037,505
+ *                                      < Static count), unlike staticIndexB.
  *   @0x08  u32   worldObjectChainHead  Dynamic world-object chain head; 0 at rest
  *                                      (runtime-only), always 0 in authored data.
- *   @0x0C  u32   staticIndexB          second Static.PAK-style reference, same
- *                                      20-bit index + flag packing. (The reference
- *                                      names this a Floor overlay chain — our data
- *                                      matched Static selfIndex; naming unresolved.)
+ *   @0x0C  u32   staticIndexB          second Static.PAK reference: low 20 bits =
+ *                                      record index, upper bits = flags (0..6).
+ *                                      RESOLVED 2026-10-14 (`discriminate_cell_refs.ts`):
+ *                                      the reference labels this a Floor overlay
+ *                                      chain, but reading the low 20 bits as a
+ *                                      Static index lands on a valid record
+ *                                      (Static[masked].self==masked) 100% of the
+ *                                      time, whereas reading the full u32 as a Floor
+ *                                      index hits uninitialised Floor records 85.6%
+ *                                      of the time — so it is Static, not Floor.
  *   @0x10  sbyte visualElevation[4]    L/T/R/B visual Y offset of the terrain
  *                                      vertices (on liquid also per-corner opacity).
  *   @0x14  byte  bakedBrightness[4]    SW/NW/NE/SE baked corner brightness, in
